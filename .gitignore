@@ -1,0 +1,10 @@
+*.iml
+.gradle/
+build/
+local.properties
+.idea/
+captures/
+.cxx/
+*.apk
+# Tanzil text: fetched by scripts/fetch_quran.sh (keep unmodified + attribute tanzil.net)
+app/src/main/assets/quran/quran-uthmani.txt

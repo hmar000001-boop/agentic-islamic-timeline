@@ -5,7 +5,7 @@ The project currently references the following dependencies; no dependency is co
 - Android Gradle Plugin: Google Android Open Source Project licensing terms.
 - Kotlin Gradle Plugin / Compose compiler: Apache License 2.0.
 - Kotlin Symbol Processing (KSP): Apache License 2.0.
-- AndroidX / Jetpack Compose / Room / DataStore / WorkManager: Apache License 2.0.
+- AndroidX / Jetpack Compose / Lifecycle / Room / DataStore / WorkManager: Apache License 2.0.
 - SQLCipher for Android Community Edition: verify the current upstream license and Community Edition distribution terms before public release.
 - CycloneDX Gradle plugin: Apache License 2.0.
 

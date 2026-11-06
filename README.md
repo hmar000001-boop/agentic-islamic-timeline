@@ -1,6 +1,6 @@
-# Timeline agentique — Android source foundation (Phase 1)
+# Timeline agentique — Android source foundation (Phases 1–2)
 
-**Version:** `0.1.0-phase1`  
+**Version:** `0.2.0-phase2`  
 **Architecture:** `Cahier_architecture_Timeline_agentique_v1.2.md`  
 **Readiness:** `Rapport_final_readiness_demarrage_Timeline_agentique.md`  
 **Package ID:** provisional `app.timeline.islamic`  
@@ -15,8 +15,12 @@
 - Database passphrase envelope under `noBackupFilesDir`, atomic file replacement, and fail-closed handling if database exists but the envelope/key cannot be recovered.
 - Room tables also cover task leases/events, Canvas steps/artifacts/snapshots, action outbox/execution receipts, Hifz records, prayer profiles, attachments, installed corpus packs and installed models.
 - DataStore locale preference contract and Arabic/English resources.
-- Compose app shell with edge-to-edge system-bar insets; no LLM required to start the app shell.
-- Unit tests for domain invariants and default-deny authorization; instrumented encrypted-database persistence tests.
+- Compose application shell with edge-to-edge system-bar insets; no LLM is required for the application to run.
+- Phase 2 Timeline: local-date navigation, locale-aware week strip, type filters, Room-backed event/task/habit creation, completion/cancellation of user-owned task/habit entries, and an explicit empty/error state without synthetic sample events.
+- Phase 2 Canvas: create, reopen, edit and archive local workspaces; versioned draft codec; optimistic version checks; transactional snapshots; Arabic/English notes.
+- Timeline date windows use the selected zone's real day boundaries (23/24/25 hours across DST); SQL query includes entries overlapping the displayed day without including boundary-touching entries.
+- Arabic and English resource sets for both feature modules, Android per-app language metadata, and RTL-capable layouts.
+- Unit tests for date windows, Timeline filters and Canvas draft codec; instrumented encrypted database, midnight overlap and Canvas snapshot/version tests; default-deny authorization tests.
 - GitHub Actions workflow for build, unit tests, lint, merged-manifest permission audit, manually booted API 36 emulator instrumentation, dependency report, secret-pattern scan, and CycloneDX SBOM. Action references are pinned to a commit SHA.
 
 ## Honest verification status
@@ -80,10 +84,26 @@ Gradle dependency locking is enabled for all configurations, and dynamic depende
 
 ## Phase 1 boundaries
 
-This foundation does not yet implement the full ActionProposal fingerprint/ApprovalReceipt/lease/outbox executor, domain engines, timeline feature UI, Canvas feature UI, corpus importer, RAG retrieval, model manager, LiteRT-LM, OCR, ASR, prayer calculations, Hifz evaluation, or any religious verdict. Those components remain subsequent implementation tranches and release gates. The authorization module here is a deliberately small fail-closed baseline, not a claim that the complete authorization platform is finished. The agent checkpoint/lease/outbox tables exist, but their crash-recovery state machine and executor are subsequent implementation work.
+## Phase 2 boundaries
+
+The Timeline and Canvas are now real Room-backed feature modules, but this is the first functional slice of Phase 2, not the completion of the entire Phase 2 roadmap. Not yet included: recurring habit rules, all-day/recurring event editing, Android calendar integration, notification scheduling and exact-alarm permission flows, a dedicated history screen, multi-step Canvas step editing, Canvas attachments/undo, prayer-time cards from an approved calculation engine, agent-generated decision cards, and notification preferences. The Timeline is intentionally useful without any LLM or validated prayer engine; it does not invent prayer times or agent suggestions.
+
+The project still does not implement the full ActionProposal fingerprint/ApprovalReceipt/lease/outbox executor, corpus importer, RAG retrieval, model manager, LiteRT-LM, OCR, ASR, prayer calculations, Hifz evaluation, or any religious verdict. These components remain subsequent implementation tranches and release gates. The authorization module remains a deliberately small fail-closed baseline, not the complete authorization platform. The agent checkpoint/lease/outbox tables exist, but their crash-recovery state machine and executor are subsequent implementation work.
 
 ## Continuity and checkpoints
 
 - Project folder: `/Timeline_Agentique/`
 - Checkpoints: `/Timeline_Agentique/Checkpoints/`
 - Every subsequent meaningful delivery must include an immutable checkpoint, ZIP and SHA-256 in the project folder. Never overwrite the previous checkpoint.
+
+## Phase 2 implementation status
+
+| Area | Implementation | Verification in this authoring environment |
+|---|---|---|
+| Timeline feature module | Implemented; Room-backed date window, filters, add event/task/habit, complete/cancel | Kotlin ViewModel and domain compilation; targeted local tests invoked |
+| Canvas feature module | Implemented; persistent draft create/edit/archive and immutable snapshots with compare-and-set versioning | Kotlin ViewModel/repository compilation; draft codec tests invoked |
+| Localization | English + Arabic UI strings and app locale metadata | XML/resource-key checks |
+| Room DAO | Midnight overlap query and atomic Canvas session/snapshot operations | Instrumented tests added, not run here |
+| Android Compose compile | Not verified | Android SDK and Gradle bootstrap unavailable |
+
+The locally invoked Kotlin test harness executed seven targeted unit-test methods successfully. This was not a Gradle/JUnit runner execution and does not replace CI. Android build, KSP/Room code generation, SQLCipher instrumented tests and actual RTL rendering must be verified on a network-enabled Android build runner/device.

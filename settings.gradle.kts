@@ -12,3 +12,6 @@ include(":core:authorization")
 include(":core:security")
 include(":core:localization")
 include(":core:persistence")
+
+include(":feature:timeline")
+include(":feature:canvas")

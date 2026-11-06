@@ -32,3 +32,21 @@ interface TimelineRepository {
     suspend fun upsert(item: TimelineItem)
     suspend fun remove(itemId: String)
 }
+
+
+/** Date boundaries are computed in the user's zone so DST days can be 23 or 25 hours. */
+data class TimelineWindow(val fromInclusive: Instant, val untilExclusive: Instant) {
+    init { require(untilExclusive.isAfter(fromInclusive)) }
+
+    companion object {
+        fun forDate(date: java.time.LocalDate, zone: java.time.ZoneId): TimelineWindow =
+            TimelineWindow(
+                date.atStartOfDay(zone).toInstant(),
+                date.plusDays(1).atStartOfDay(zone).toInstant()
+            )
+    }
+}
+
+/** Only ordinary user-owned items can be created directly from the Timeline form. */
+fun TimelineItemType.isUserCreatable(): Boolean =
+    this == TimelineItemType.EVENT || this == TimelineItemType.TASK || this == TimelineItemType.HABIT

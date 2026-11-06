@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Timeline agentique</string>
     <string name="phase1_foundation_message">Local foundation is installed. Your timeline will remain available without an AI model.</string>
+    <string name="app_storage_open_error">The encrypted local store could not be opened. No unencrypted fallback was used.</string>
 </resources>

@@ -7,7 +7,7 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 @Dao interface TimelineDao {
-    @Query("SELECT * FROM timeline_item WHERE startsAtEpochMillis >= :from AND startsAtEpochMillis < :until ORDER BY startsAtEpochMillis ASC")
+    @Query("SELECT * FROM timeline_item WHERE startsAtEpochMillis < :until AND (endsAtEpochMillis IS NULL OR endsAtEpochMillis > :from) ORDER BY startsAtEpochMillis ASC")
     fun observeBetween(from: Long, until: Long): Flow<List<TimelineItemEntity>>
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insert(item: TimelineItemEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(item: TimelineItemEntity)
@@ -46,7 +46,22 @@ import kotlinx.coroutines.flow.Flow
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertSession(session: CanvasSessionEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertSession(session: CanvasSessionEntity)
     @Query("SELECT * FROM canvas_session WHERE id = :id") suspend fun getSession(id: String): CanvasSessionEntity?
+    @Query("SELECT * FROM canvas_session ORDER BY updatedAtEpochMillis DESC") fun observeSessions(): Flow<List<CanvasSessionEntity>>
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertSnapshot(snapshot: CanvasSnapshotEntity)
+    @Query("UPDATE canvas_session SET domain = :domain, status = :status, encryptedState = :state, currentStep = :currentStep, version = :newVersion, updatedAtEpochMillis = :updatedAt WHERE id = :id AND version = :expectedVersion")
+    suspend fun updateIfVersionMatches(id: String, expectedVersion: Long, newVersion: Long, domain: String, status: String, state: ByteArray, currentStep: String?, updatedAt: Long): Int
+    @androidx.room.Transaction
+    suspend fun createWithSnapshot(session: CanvasSessionEntity, snapshot: CanvasSnapshotEntity) {
+        insertSession(session)
+        insertSnapshot(snapshot)
+    }
+    @androidx.room.Transaction
+    suspend fun updateWithSnapshot(session: CanvasSessionEntity, expectedVersion: Long, snapshot: CanvasSnapshotEntity): Boolean {
+        val updated = updateIfVersionMatches(session.id, expectedVersion, session.version, session.domain, session.status, session.encryptedState, session.currentStep, session.updatedAtEpochMillis)
+        if (updated != 1) return false
+        insertSnapshot(snapshot)
+        return true
+    }
     @Query("SELECT * FROM canvas_snapshot WHERE canvasId = :canvasId ORDER BY snapshotVersion DESC LIMIT 1") suspend fun latestSnapshot(canvasId: String): CanvasSnapshotEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertStep(step: CanvasStepEntity)
     @Query("SELECT * FROM canvas_step WHERE canvasId = :canvasId ORDER BY stepKey") suspend fun steps(canvasId: String): List<CanvasStepEntity>

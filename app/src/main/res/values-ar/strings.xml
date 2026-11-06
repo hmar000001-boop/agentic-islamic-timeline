@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">الجدول الزمني الذكي</string>
     <string name="phase1_foundation_message">تم تثبيت الأساس المحلي. سيظل جدولك الزمني متاحًا دون نموذج ذكاء اصطناعي.</string>
+    <string name="app_storage_open_error">تعذر فتح مساحة التخزين المحلية المشفرة. لم يتم استخدام تخزين غير مشفر كبديل.</string>
 </resources>

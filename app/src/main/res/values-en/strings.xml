@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Timeline agentique</string>
+    <string name="phase1_foundation_message">Local foundation is installed. Your timeline will remain available without an AI model.</string>
+</resources>

@@ -30,7 +30,7 @@ import androidx.room.RoomDatabase
         AgentTaskEventEntity::class,
         CanvasStepEntity::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

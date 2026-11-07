@@ -84,7 +84,8 @@ data class PendingApprovalEntity(
     val proposalHash: String,
     val state: String,
     val expiresAtEpochMillis: Long,
-    val decisionAtEpochMillis: Long?
+    val decisionAtEpochMillis: Long?,
+    val sourceGrantId: String? = null
 )
 
 @Entity(tableName = "permission_grant", indices = [Index("actionType"), Index("expiresAtEpochMillis")])
@@ -157,9 +158,10 @@ data class ActionOutboxEntity(
     val updatedAtEpochMillis: Long
 )
 
-@Entity(tableName = "action_execution", indices = [Index("proposalHash"), Index("idempotencyKey", unique = true), Index("state")])
+@Entity(tableName = "action_execution", indices = [Index("proposalHash"), Index("proposalId", unique = true), Index("idempotencyKey", unique = true), Index("state")])
 data class ActionExecutionEntity(
     @PrimaryKey val id: String,
+    val proposalId: String?,
     val proposalHash: String,
     val idempotencyKey: String,
     val state: String,

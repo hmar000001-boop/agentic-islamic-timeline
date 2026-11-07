@@ -15,3 +15,5 @@ include(":core:persistence")
 
 include(":feature:timeline")
 include(":feature:canvas")
+
+include(":core:agent-runtime")

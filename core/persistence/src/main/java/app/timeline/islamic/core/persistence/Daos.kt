@@ -18,7 +18,10 @@ import kotlinx.coroutines.flow.Flow
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertTask(task: AgentTaskEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertTask(task: AgentTaskEntity)
     @Query("SELECT * FROM agent_task WHERE id = :id") suspend fun getTask(id: String): AgentTaskEntity?
+    @Query("UPDATE agent_task SET status = :newStatus, stateVersion = stateVersion + 1, updatedAtEpochMillis = :now WHERE id = :taskId AND status = :expectedStatus AND stateVersion = :expectedVersion")
+    suspend fun transitionTask(taskId: String, expectedStatus: String, expectedVersion: Long, newStatus: String, now: Long): Int
     @Query("SELECT * FROM agent_task WHERE status IN (:statuses) ORDER BY createdAtEpochMillis") fun observeTasks(statuses: List<String>): Flow<List<AgentTaskEntity>>
+    @Query("SELECT agent_task.* FROM agent_task INNER JOIN agent_task_lease ON agent_task.id = agent_task_lease.taskId WHERE agent_task.status = 'RUNNING' AND agent_task_lease.expiresAtEpochMillis <= :now") suspend fun runningTasksWithExpiredLease(now: Long): List<AgentTaskEntity>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertStep(step: AgentTaskStepEntity)
     @Query("SELECT * FROM agent_task_step WHERE taskId = :taskId ORDER BY sequence") suspend fun getSteps(taskId: String): List<AgentTaskStepEntity>
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertCheckpoint(checkpoint: AgentTaskCheckpointEntity)
@@ -27,7 +30,15 @@ import kotlinx.coroutines.flow.Flow
     @Query("SELECT * FROM agent_task_event WHERE taskId = :taskId ORDER BY sequence") suspend fun taskEvents(taskId: String): List<AgentTaskEventEntity>
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun createLeaseIfAbsent(lease: AgentTaskLeaseEntity): Long
     @Query("SELECT * FROM agent_task_lease WHERE taskId = :taskId") suspend fun lease(taskId: String): AgentTaskLeaseEntity?
-    @Query("UPDATE agent_task_lease SET leaseOwner = :owner, acquiredAtEpochMillis = :now, heartbeatAtEpochMillis = :now, expiresAtEpochMillis = :expiresAt, fencingToken = fencingToken + 1 WHERE taskId = :taskId AND expiresAtEpochMillis <= :now") suspend fun takeExpiredLease(taskId: String, owner: String, now: Long, expiresAt: Long): Int
+    @Query("UPDATE agent_task_lease SET heartbeatAtEpochMillis = :now, expiresAtEpochMillis = :expiresAt WHERE taskId = :taskId AND leaseOwner = :owner AND fencingToken = :fencingToken AND acquiredAtEpochMillis <= :now AND heartbeatAtEpochMillis <= :now AND expiresAtEpochMillis > :now")
+    suspend fun heartbeatLease(taskId: String, owner: String, fencingToken: Long, now: Long, expiresAt: Long): Int
+    @Query("UPDATE agent_task_lease SET expiresAtEpochMillis = :now WHERE taskId = :taskId AND leaseOwner = :owner AND fencingToken = :fencingToken AND acquiredAtEpochMillis <= :now AND heartbeatAtEpochMillis <= :now AND expiresAtEpochMillis > :now")
+    suspend fun releaseLease(taskId: String, owner: String, fencingToken: Long, now: Long): Int
+    @Query("UPDATE agent_task_lease SET expiresAtEpochMillis = :now WHERE taskId = :taskId")
+    suspend fun expireLeaseForTask(taskId: String, now: Long): Int
+    @Query("SELECT COALESCE(MAX(sequence), 0) FROM agent_task_event WHERE taskId = :taskId")
+    suspend fun maxEventSequence(taskId: String): Long
+    @Query("UPDATE agent_task_lease SET leaseOwner = :owner, acquiredAtEpochMillis = :now, heartbeatAtEpochMillis = :now, expiresAtEpochMillis = :expiresAt, fencingToken = fencingToken + 1 WHERE taskId = :taskId AND acquiredAtEpochMillis <= :now AND heartbeatAtEpochMillis <= :now AND expiresAtEpochMillis <= :now") suspend fun takeExpiredLease(taskId: String, owner: String, now: Long, expiresAt: Long): Int
 }
 
 @Dao interface AuthorizationDao {
@@ -35,11 +46,23 @@ import kotlinx.coroutines.flow.Flow
     @Query("SELECT * FROM action_proposal WHERE id = :id") suspend fun proposal(id: String): ActionProposalEntity?
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertApproval(approval: PendingApprovalEntity)
     @Query("SELECT * FROM pending_approval WHERE proposalId = :proposalId ORDER BY expiresAtEpochMillis DESC") suspend fun approvals(proposalId: String): List<PendingApprovalEntity>
+    @Query("SELECT * FROM pending_approval WHERE state = 'PENDING' AND expiresAtEpochMillis <= :now") suspend fun expiredPendingApprovals(now: Long): List<PendingApprovalEntity>
+    @Query("UPDATE pending_approval SET state = 'EXPIRED', decisionAtEpochMillis = :now WHERE id = :approvalId AND state = 'PENDING' AND expiresAtEpochMillis <= :now") suspend fun expireApproval(approvalId: String, now: Long): Int
+    @Query("UPDATE pending_approval SET state = :newState, decisionAtEpochMillis = :decisionAt, expiresAtEpochMillis = :newExpiresAt WHERE id = :approvalId AND proposalHash = :proposalHash AND state = :expectedState AND expiresAtEpochMillis > :decisionAt")
+    suspend fun decideApproval(approvalId: String, proposalHash: String, expectedState: String, newState: String, decisionAt: Long, newExpiresAt: Long): Int
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertGrant(grant: PermissionGrantEntity)
     @Query("SELECT * FROM permission_grant WHERE id = :grantId") suspend fun grant(grantId: String): PermissionGrantEntity?
+    @Query("SELECT * FROM permission_grant WHERE actionType = :actionType ORDER BY createdAtEpochMillis DESC") suspend fun grantsForAction(actionType: String): List<PermissionGrantEntity>
     @Query("UPDATE permission_grant SET revokedAtEpochMillis = :revokedAt WHERE id = :grantId AND revokedAtEpochMillis IS NULL") suspend fun revokeGrant(grantId: String, revokedAt: Long): Int
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertExecution(execution: ActionExecutionEntity)
     @Query("SELECT * FROM action_execution WHERE id = :id") suspend fun execution(id: String): ActionExecutionEntity?
+    @Query("SELECT * FROM action_execution WHERE proposalId = :proposalId LIMIT 1") suspend fun executionForProposal(proposalId: String): ActionExecutionEntity?
+    @Query("SELECT * FROM action_execution WHERE state = :state ORDER BY createdAtEpochMillis") suspend fun executionsByState(state: String): List<ActionExecutionEntity>
+    @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertOutbox(item: ActionOutboxEntity)
+    @Query("UPDATE action_execution SET state = :state, encryptedReceipt = :receipt, updatedAtEpochMillis = :now WHERE id = :executionId AND state IN ('EXECUTING', 'CLAIMED')") suspend fun finishExecution(executionId: String, state: String, receipt: ByteArray?, now: Long): Int
+    @Query("UPDATE action_execution SET state = 'EXECUTING', updatedAtEpochMillis = :now WHERE id = :executionId AND state = 'CLAIMED' AND proposalHash = :proposalHash AND idempotencyKey = :idempotencyKey") suspend fun startExecution(executionId: String, proposalHash: String, idempotencyKey: String, now: Long): Int
+    @Query("UPDATE action_outbox SET state = 'EXECUTING', updatedAtEpochMillis = :now WHERE id = :executionId AND state = 'CLAIMED' AND actionHash = :proposalHash AND idempotencyKey = :idempotencyKey") suspend fun startOutbox(executionId: String, proposalHash: String, idempotencyKey: String, now: Long): Int
+    @Query("UPDATE action_outbox SET state = :state, encryptedReceipt = :receipt, updatedAtEpochMillis = :now WHERE id = :executionId AND state IN ('EXECUTING', 'CLAIMED')") suspend fun finishOutbox(executionId: String, state: String, receipt: ByteArray?, now: Long): Int
 }
 
 @Dao interface CanvasDao {
@@ -70,6 +93,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao interface AuditDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun append(event: AuditEventEntity)
     @Query("SELECT * FROM audit_event ORDER BY sequence DESC LIMIT :limit") suspend fun latest(limit: Int): List<AuditEventEntity>
+    @Query("SELECT * FROM audit_event ORDER BY sequence ASC") suspend fun allAscending(): List<AuditEventEntity>
 }
 
 @Dao interface ContextEventDao {
@@ -81,6 +105,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao interface ActionOutboxDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun prepare(item: ActionOutboxEntity)
     @Query("SELECT * FROM action_outbox WHERE state IN (:states) ORDER BY updatedAtEpochMillis") suspend fun byStates(states: List<String>): List<ActionOutboxEntity>
+    @Query("SELECT * FROM action_outbox WHERE id = :id") suspend fun getById(id: String): ActionOutboxEntity?
     @Query("UPDATE action_outbox SET state = :state, attempt = attempt + 1, updatedAtEpochMillis = :updatedAt WHERE id = :id") suspend fun transition(id: String, state: String, updatedAt: Long): Int
 }
 

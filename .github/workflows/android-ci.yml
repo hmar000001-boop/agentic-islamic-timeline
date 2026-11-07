@@ -40,7 +40,7 @@ jobs:
       - name: Verify Gradle distribution
         run: ./gradlew --version
       - name: Unit tests
-        run: ./gradlew --no-daemon :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest
+        run: ./gradlew --no-daemon :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest
       - name: Assemble and lint
         run: ./gradlew --no-daemon :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug
       - name: Audit offline merged manifest

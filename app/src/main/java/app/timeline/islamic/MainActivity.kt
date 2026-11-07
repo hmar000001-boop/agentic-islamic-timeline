@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +21,8 @@ import app.timeline.islamic.core.persistence.RoomCanvasRepository
 import app.timeline.islamic.core.persistence.RoomTimelineRepository
 import app.timeline.islamic.feature.canvas.CanvasFeature
 import app.timeline.islamic.feature.timeline.TimelineFeature
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 private enum class AppDestination { TIMELINE, CANVAS }
 
@@ -27,7 +30,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val databaseResult = runCatching { (application as TimelineApplication).database }
+        val timelineApplication = application as TimelineApplication
+        val databaseResult = runCatching { timelineApplication.database }
+        // Recovery is local and bounded. A failed integrity check blocks agent work, but does not
+        // hide the read-only Timeline/Canvas experience.
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { timelineApplication.initializeAgentRuntime() }
+        }
         setContent {
             MaterialTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {

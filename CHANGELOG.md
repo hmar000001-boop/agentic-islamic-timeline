@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1-ci-fix — 2026-11-07
+- Fixed the Android CI JDK selection step: `GITHUB_ENV` now receives only a valid `JAVA_HOME=VALUE` record; the previous bare-path line caused the runner to fail with `Invalid format '/usr/lib/jvm/temurin-17-jdk-amd64'` after Java 17 had already launched successfully.
+- Added explicit checks that `JAVA_HOME_17_X64` is set and that its `bin/java` executable exists before exporting it.
+- Verified the workflow YAML structure and shell syntax locally; full GitHub Actions / Android Gradle execution still requires the hosted runner and SDK/dependency access.
+
 ## 0.1.0-phase1 — 2026-11-06
 - Materialized the actual Gradle multi-module Android project and package structure (previous workspace contained only project documentation).
 - Added Room schema v1 with 24 user-state tables, DAOs and Timeline repository adapter.

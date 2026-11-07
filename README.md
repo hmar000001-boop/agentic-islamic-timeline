@@ -1,6 +1,6 @@
 # Timeline agentique — Android source foundation (Phases 1–3)
 
-**Version:** `0.3.0-phase3`  
+**Version:** `0.3.1-phase3-ci-fix`  
 **Architecture:** `Cahier_architecture_Timeline_agentique_v1.2.md`  
 **Readiness:** `Rapport_final_readiness_demarrage_Timeline_agentique.md`  
 **Package ID:** provisional `app.timeline.islamic`  
@@ -27,6 +27,7 @@
 - Crash policy: abandoned `CLAIMED` records are aborted before effect; abandoned `EXECUTING` records become `OUTCOME_UNKNOWN`; neither is automatically replayed. Known `VERIFIED`/`FAILED` outcomes requeue only when the reporting worker still owns the matching fencing token.
 - HMAC-SHA256 audit chain using an Android Keystore key; audit verification runs before app-level agent entry points are enabled. Payload values are hashed rather than copied into the audit table.
 - GitHub Actions workflow for build, unit tests, lint, merged-manifest permission audit, manually booted API 36 emulator instrumentation, dependency report, secret-pattern scan, and CycloneDX SBOM. Action references are pinned to a commit SHA.
+- CI hotfix `0.3.1`: JDK setup now validates the preinstalled JDK path and writes only the valid `JAVA_HOME=VALUE` assignment to `GITHUB_ENV`; it no longer emits a bare path that GitHub Actions rejects as an invalid environment-file record.
 
 ## Honest verification status
 

@@ -108,3 +108,11 @@ The instrumentation source tests exist in:
 5. Continue from this codebase by adding a user-facing Decision Card approval surface and only then the first concrete action handler, always through `AuthorizationEngine` and `ToolExecutionGateway`.
 
 **Next version should be an incremental correction/verification of `0.3.0-phase3`, not a new project.**
+
+## 2026-11-07 CI hotfix checkpoint (0.3.1)
+
+- Reported failure: GitHub Actions `Set preinstalled JDK 17` step starts Temurin 17.0.21 correctly, but environment-file parsing fails with `Invalid format '/usr/lib/jvm/temurin-17-jdk-amd64'`.
+- Root cause: `.github/workflows/android-ci.yml` appended `$JAVA_HOME_17_X64` by itself to `$GITHUB_ENV`. The required format is `NAME=VALUE`.
+- Fix: validate `JAVA_HOME_17_X64`, validate its `bin/java`, then append only `JAVA_HOME=<path>` using `printf`.
+- Scope: narrow CI hotfix only; no application/runtime/authorization behavior changed.
+- Next: push this archive/source and rerun GitHub Actions. A successful JDK-selection step will expose any subsequent independent CI/build failures; do not treat this fix as a full Android build verification.

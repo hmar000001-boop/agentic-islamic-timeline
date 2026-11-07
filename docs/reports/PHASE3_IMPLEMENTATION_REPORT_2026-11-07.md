@@ -135,3 +135,8 @@ Continue from this exact source tree and do not recreate it.
 ## 6. Release posture
 
 **Status: Phase 3 source implementation created; not a release candidate.** No APK/AAB is claimed. No Android build, Room/KSP code generation, SQLCipher/Keystore instrumentation or physical-device test is claimed as passed. Sensitive production data should not be entered until the encryption/recovery instrumentation gate is green.
+## CI hotfix 0.3.1 — JDK environment-file format
+
+The supplied GitHub Actions log reaches `java -version` successfully using Temurin 17.0.21, then fails when the runner parses `$GITHUB_ENV`. The former workflow wrote the bare value of `JAVA_HOME_17_X64` as a line before writing `JAVA_HOME=<value>`. GitHub Actions environment files require `NAME=VALUE` records, so the bare path was rejected. The workflow now checks that the variable is non-empty, checks that `$JAVA_HOME_17_X64/bin/java` is executable, and writes only `JAVA_HOME=<value>` using `printf`.
+
+Local verification confirms the malformed bare-path write is absent and the shell block parses. This corrects the exact reported failure; it does not establish that later Gradle, SDK, KSP, SQLCipher or instrumentation steps pass. Those remain to be verified by the next hosted CI run.

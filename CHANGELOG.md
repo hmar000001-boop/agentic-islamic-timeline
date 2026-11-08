@@ -1,10 +1,20 @@
+# Changelog
+
+## 0.5.0-phase4c-agp9-built-in-kotlin — 2026-11-08
+- Continued incrementally from the Phase 4B/0.4.3 source; preserved Timeline, Canvas, Phase 3 agent/authorization runtime, signed corpus packs, publisher trust and retrieval.
+- Completed the AGP 9 built-in Kotlin migration: removed the external `org.jetbrains.kotlin.android` plugin and both temporary AGP opt-out flags; all Android modules use typed public `ApplicationExtension`/`LibraryExtension` DSL; Compose compiler uses the dedicated `org.jetbrains.kotlin.plugin.compose` plugin.
+- Migrated BuildConfig publisher-root values to `ApplicationAndroidComponentsExtension.onVariants` and `variant.buildConfigFields`, removed project use of deprecated `buildConfigField()` and legacy Android variant APIs, and kept Kotlin 2.4.21 / KSP 2.3.13 / AGP 9.3.1 / Gradle 9.5.0 explicitly pinned.
+- Fixed CI's dependency-resolution conflict by no longer applying `failOnDynamicVersions()` manually and explicitly deactivating dependency locking on AGP `*RuntimeClasspath` and CycloneDX BOM configurations. Root KGP/KSP buildscript classpath and all other resolvable project configurations remain locked; catalog/direct dynamic selectors are statically rejected. Explicit `--no-configuration-cache` is added to CI Gradle commands until the AGP navigation/dependency-report task serialization issue is independently resolved.
+- Phase 4C adds the app-wired corpus-management feature, SAF keyring/pack import and update, lifecycle/revalidation UI, encrypted Room v5 dense-index generations/vectors and streaming bounded local embedding-index builder.
+- Dense vector bytes remain inside SQLCipher Room; no sidecar plaintext vector database or source passage text is written. The builder caps a single generation at 128 MiB and the store caps total active/staging vector payload at 256 MiB. Inactive/quarantined/superseded pack generations are cleaned after trust/lifecycle changes.
+- Dense retrieval remains disabled until a real, reviewed compatible on-device embedding model is provisioned. No model weights, fake model adapter, placeholder vectors, remote embeddings or rights-cleared scholarly corpus are included. FTS5 remains the functioning lexical path.
+- Added AGP built-in Kotlin/public DSL, dependency-lock-policy and Phase 4C UI/encryption guards, plus Room SQLCipher dense-generation instrumentation source coverage. Actual Android Gradle/KSP, SQLCipher instrumentation, emulator and physical-device tests are still NOT RUN in the authoring environment.
+
 ## 0.4.3-phase4b-agp-kotlin-dsl-compatibility-fix — 2026-11-08
 - Fixed the GitHub Actions Gradle configuration failure: AGP 9.3.1 enables the new DSL by default, which is incompatible with the project's applied `org.jetbrains.kotlin.android` plugin while the build also opts out of built-in Kotlin.
 - Kept the existing external Kotlin Gradle Plugin 2.4.21 / Compose compiler / KSP toolchain and set both required AGP 9 compatibility properties: `android.builtInKotlin=false` and `android.newDsl=false`. This is a temporary AGP 9 profile; AGP 10 removes these opt-outs and requires a coordinated built-in Kotlin and KSP migration.
 - Added `scripts/verify-agp-kotlin-mode.py` and wired it into CI before Gradle configuration. It verifies both properties, the pinned AGP major, the version-catalog Kotlin Android plugin, and consistent plugin application across Android modules.
 - No application/runtime/Room/corpus/retrieval/authorization code changed. Static configuration tests pass locally; a real Gradle build still requires the GitHub runner because the authoring container has no installed Gradle or Android SDK.
-
-# Changelog
 
 ## 0.4.0-phase4-knowledge-foundation — 2026-11-08
 - Continued incrementally from the immutable Phase 3.0.1 source; retained Timeline, Canvas, authorization, agent runtime and Room schema v3.

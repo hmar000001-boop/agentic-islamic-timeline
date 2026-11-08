@@ -7,6 +7,8 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import app.timeline.islamic.core.knowledge.CorpusIndexValidationReport
 import app.timeline.islamic.core.knowledge.CorpusIndexValidator
 import app.timeline.islamic.core.knowledge.CorpusLanguage
+import app.timeline.islamic.core.knowledge.EmbeddingPassageInput
+import app.timeline.islamic.core.knowledge.EmbeddingPassageSource
 import app.timeline.islamic.core.knowledge.CorpusPackManifest
 import app.timeline.islamic.core.knowledge.CorpusSourceMetadata
 import app.timeline.islamic.core.knowledge.CorpusSourceType
@@ -25,7 +27,7 @@ import java.io.File
  */
 class BundledSqliteCorpusIndex(
     private val driver: BundledSQLiteDriver = BundledSQLiteDriver()
-) : CorpusIndexValidator, CorpusPackIndexSearcher {
+) : CorpusIndexValidator, CorpusPackIndexSearcher, EmbeddingPassageSource {
 
     override fun validate(indexFile: File, manifest: CorpusPackManifest, asOfEpochMillis: Long): CorpusIndexValidationReport {
         require(indexFile.isFile && indexFile.length() > 0L) { "Corpus SQLite file is absent or empty" }
@@ -145,6 +147,38 @@ class BundledSqliteCorpusIndex(
                 }
             }
             CorpusIndexValidationReport(userVersion.toInt(), sourceCount, passageCount, languages)
+        }
+    }
+
+
+    /** Reads source text in bounded row-id batches for a pluggable local embedding model. */
+    override suspend fun readBatch(
+        pack: app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord,
+        indexFile: File,
+        afterRowId: Long,
+        limit: Int
+    ): List<EmbeddingPassageInput> {
+        require(pack.status == app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord.STATUS_INSTALLED)
+        require(indexFile.isFile && afterRowId >= 0L && limit in 1..64)
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            open(indexFile).use { connection ->
+                connection.execSQL("PRAGMA query_only = ON")
+                connection.prepare(
+                    "SELECT rowid, stable_evidence_key, original_text FROM passage WHERE rowid > ? ORDER BY rowid ASC LIMIT ?"
+                ).use { statement ->
+                    statement.bindLong(1, afterRowId)
+                    statement.bindLong(2, limit.toLong())
+                    buildList {
+                        while (statement.step()) add(
+                            EmbeddingPassageInput(
+                                rowId = statement.getLong(0),
+                                stableEvidenceKey = statement.getText(1),
+                                originalText = statement.getText(2)
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 

@@ -1,18 +1,24 @@
+import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import com.android.build.api.variant.BuildConfigField
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
-android {
+val configuredRootId = providers.gradleProperty("corpusPublisherRootKeyId").orElse("").get()
+val configuredRootKey = providers.gradleProperty("corpusPublisherRootKeyB64").orElse("").get()
+fun buildConfigString(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+extensions.configure<ApplicationExtension>("android") {
     namespace = "app.timeline.islamic"
     compileSdk = 36
     defaultConfig {
         applicationId = "app.timeline.islamic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0-phase3"
+        versionCode = 5
+        versionName = "0.5.0-phase4c"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     flavorDimensions += "distribution"
@@ -21,10 +27,29 @@ android {
         create("playDistribution") { dimension = "distribution" }
     }
     buildTypes { release { isMinifyEnabled = false } }
-    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    buildFeatures { compose = true; buildConfig = true }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
-kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
+
+// BuildConfig values use the lazy public Variant API; no deprecated eager buildConfigField calls.
+extensions.configure<ApplicationAndroidComponentsExtension>("androidComponents") {
+    onVariants(selector().all()) { variant ->
+        variant.buildConfigFields.put(
+            "CORPUS_PUBLISHER_ROOT_KEY_ID",
+            BuildConfigField("String", buildConfigString(configuredRootId), "Pinned publisher root key identifier")
+        )
+        variant.buildConfigFields.put(
+            "CORPUS_PUBLISHER_ROOT_KEY_B64",
+            BuildConfigField("String", buildConfigString(configuredRootKey), "Pinned publisher root Ed25519 public key, base64")
+        )
+    }
+}
 
 dependencies {
     implementation(project(":core:common"))
@@ -35,8 +60,11 @@ dependencies {
     implementation(project(":core:security"))
     implementation(project(":core:localization"))
     implementation(project(":core:persistence"))
+    implementation(project(":core:corpus"))
+    implementation(project(":core:retrieval"))
     implementation(project(":feature:timeline"))
     implementation(project(":feature:canvas"))
+    implementation(project(":feature:corpus-management"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)

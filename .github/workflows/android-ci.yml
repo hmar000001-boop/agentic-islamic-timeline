@@ -38,23 +38,27 @@ jobs:
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "emulator" "system-images;android-36;google_apis;x86_64"
       - name: Scan source for common secret patterns
         run: python3 scripts/secret-scan.py
-      - name: Validate Phase 4 Room publisher-keyring migration
+      - name: Validate Phase 4 Room v5 and encrypted dense-index migrations
         run: python3 scripts/check-phase4-schema.py
       - name: Test Gradle bootstrap executable permissions
         run: python3 scripts/test-gradle-bootstrap.py
-      - name: Test AGP and Kotlin plugin compatibility guard
-        run: python3 scripts/test-agp-kotlin-mode.py
-      - name: Verify AGP and Kotlin plugin compatibility mode
-        run: python3 scripts/verify-agp-kotlin-mode.py
+      - name: Test AGP built-in Kotlin migration policy
+        run: python3 scripts/test-built-in-kotlin.py
+      - name: Verify AGP built-in Kotlin and public DSL migration
+        run: python3 scripts/verify-built-in-kotlin.py
+      - name: Verify static dependency versions and lock policy
+        run: python3 scripts/verify-gradle-reproducibility.py
+      - name: Verify Phase 4C corpus UI and encrypted embedding foundation
+        run: python3 scripts/check-phase4c-foundation.py
       - name: Verify Gradle distribution
         run: ./gradlew --version
-      - name: Unit tests
-        run: ./gradlew --no-daemon :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :core:knowledge-api:testDebugUnitTest :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest
+      - name: Unit tests and write dependency locks
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :core:knowledge-api:testDebugUnitTest :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest :feature:corpus-management:testDebugUnitTest
       - name: Assemble and lint
-        run: ./gradlew --no-daemon :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug :core:corpus:lint :core:retrieval:lint
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug :core:corpus:lint :core:retrieval:lint :feature:corpus-management:lint
       - name: Audit offline merged manifest
         run: |
-          ./gradlew --no-daemon :app:processOfflineSideloadDebugMainManifest
+          ./gradlew --no-daemon --no-configuration-cache --write-locks :app:processOfflineSideloadDebugMainManifest
           MANIFEST="$(find app/build/intermediates -type f -path '*offlineSideloadDebug*' -name AndroidManifest.xml | grep -E 'merged_manifest|merged_manifests' | head -1)"
           test -n "$MANIFEST" && test -f "$MANIFEST"
           if grep -q 'android.permission.INTERNET' "$MANIFEST"; then
@@ -79,10 +83,21 @@ jobs:
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
       - name: Instrumented Android tests
-        run: ./gradlew --no-daemon :app:connectedOfflineSideloadDebugAndroidTest :core:persistence:connectedDebugAndroidTest :core:corpus:connectedDebugAndroidTest :core:retrieval:connectedDebugAndroidTest
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:connectedOfflineSideloadDebugAndroidTest :core:persistence:connectedDebugAndroidTest :core:corpus:connectedDebugAndroidTest :core:retrieval:connectedDebugAndroidTest
       - name: Dependency resolution report
         if: always()
-        run: ./gradlew --no-daemon :app:dependencies --configuration offlineSideloadDebugRuntimeClasspath > dependency-report.txt
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:dependencies --configuration offlineSideloadDebugRuntimeClasspath > dependency-report.txt
       - name: CycloneDX SBOM
         if: always()
-        run: ./gradlew --no-daemon cyclonedxBom
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks cyclonedxBom
+
+      - name: Upload generated dependency lockfiles
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gradle-dependency-lockfiles
+          path: |
+            **/gradle.lockfile
+            **/buildscript-gradle.lockfile
+          if-no-files-found: warn
+          retention-days: 30

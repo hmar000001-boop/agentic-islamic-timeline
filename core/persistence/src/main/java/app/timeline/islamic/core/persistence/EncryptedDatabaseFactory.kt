@@ -22,7 +22,8 @@ object EncryptedDatabaseFactory {
             .addMigrations(
                 AppDatabaseMigrations.MIGRATION_1_2,
                 AppDatabaseMigrations.MIGRATION_2_3,
-                AppDatabaseMigrations.MIGRATION_3_4
+                AppDatabaseMigrations.MIGRATION_3_4,
+                AppDatabaseMigrations.MIGRATION_4_5
             )
             .build()
     }

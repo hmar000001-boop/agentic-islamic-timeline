@@ -287,3 +287,41 @@ data class PublisherKeyringStateEntity(
     val signature: ByteArray,
     val installedAtEpochMillis: Long
 )
+
+
+/** Embeddings are derived from source passages and stay in the SQLCipher-encrypted Room database. */
+@Entity(
+    tableName = "dense_index_generation",
+    indices = [Index(value = ["packId", "packVersion", "modelId", "modelVersion", "state"]), Index("state")]
+)
+data class DenseIndexGenerationEntity(
+    @PrimaryKey val generationId: String,
+    val packId: String,
+    val packVersion: String,
+    val modelId: String,
+    val modelVersion: String,
+    val modelSha256: String,
+    val dimension: Int,
+    val vectorCount: Long,
+    val encodedBytes: Long,
+    val maximumEncodedBytes: Long,
+    val state: String,
+    val createdAtEpochMillis: Long
+)
+
+@Entity(
+    tableName = "dense_index_vector",
+    primaryKeys = ["generationId", "stableEvidenceKey"],
+    foreignKeys = [ForeignKey(
+        entity = DenseIndexGenerationEntity::class,
+        parentColumns = ["generationId"],
+        childColumns = ["generationId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("generationId")]
+)
+data class DenseIndexVectorEntity(
+    val generationId: String,
+    val stableEvidenceKey: String,
+    val vector: ByteArray
+)

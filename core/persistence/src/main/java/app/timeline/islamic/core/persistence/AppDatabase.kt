@@ -29,9 +29,11 @@ import androidx.room.RoomDatabase
         AgentTaskLeaseEntity::class,
         AgentTaskEventEntity::class,
         CanvasStepEntity::class,
-        PublisherKeyringStateEntity::class
+        PublisherKeyringStateEntity::class,
+        DenseIndexGenerationEntity::class,
+        DenseIndexVectorEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -45,4 +47,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun userDomainDataDao(): UserDomainDataDao
     abstract fun installedArtifactDao(): InstalledArtifactDao
     abstract fun publisherKeyringDao(): PublisherKeyringDao
+    abstract fun denseIndexDao(): DenseIndexDao
 }

@@ -197,3 +197,92 @@ object EvidenceEligibility {
     fun matchesMadhhab(scope: MadhhabScope, selected: MadhhabScope?): Boolean =
         selected == null || scope == MadhhabScope.ALL || scope == MadhhabScope.COMPARATIVE || scope == selected
 }
+
+/** A locally installed, cryptographically identified embedding model; no remote provider is allowed. */
+data class LocalEmbeddingModelDescriptor(
+    val modelId: String,
+    val modelVersion: String,
+    val artifactSha256: String,
+    val dimension: Int,
+    val maximumInputCharacters: Int = 16_384
+) {
+    init {
+        require(modelId.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,95}")))
+        require(modelVersion.isNotBlank() && modelVersion.length <= 64)
+        require(artifactSha256.matches(Regex("[a-f0-9]{64}")))
+        require(dimension in 8..4096)
+        require(maximumInputCharacters in 256..65_536)
+    }
+}
+
+data class EmbeddingPassageInput(
+    val rowId: Long,
+    val stableEvidenceKey: String,
+    val originalText: String
+) {
+    init {
+        require(rowId > 0)
+        require(stableEvidenceKey.matches(Regex("[a-f0-9]{64}")))
+        require(originalText.isNotBlank() && originalText.length <= 100_000)
+    }
+}
+
+/** Implemented only by a verified on-device model adapter. Implementations must never call a network. */
+interface LocalTextEmbeddingModel {
+    val descriptor: LocalEmbeddingModelDescriptor
+    suspend fun embedBatch(texts: List<String>): List<FloatArray>
+}
+
+/** Streams immutable source passages from a validated signed Corpus Pack in row-id order. */
+fun interface EmbeddingPassageSource {
+    suspend fun readBatch(
+        pack: InstalledCorpusPackRecord,
+        indexFile: File,
+        afterRowId: Long,
+        limit: Int
+    ): List<EmbeddingPassageInput>
+}
+
+class QuantizedEmbeddingVector(dimension: Int, values: ByteArray) {
+    val dimension: Int = dimension
+    private val encoded = values.copyOf()
+    val values: ByteArray get() = encoded.copyOf()
+
+    init {
+        require(dimension in 8..4096)
+        require(encoded.size == dimension)
+    }
+
+    override fun equals(other: Any?): Boolean = other is QuantizedEmbeddingVector &&
+        dimension == other.dimension && encoded.contentEquals(other.encoded)
+    override fun hashCode(): Int = 31 * dimension + encoded.contentHashCode()
+}
+
+data class DenseIndexGeneration(
+    val generationId: String,
+    val packId: String,
+    val packVersion: String,
+    val modelId: String,
+    val modelVersion: String,
+    val modelSha256: String,
+    val dimension: Int,
+    val vectorCount: Long,
+    val encodedBytes: Long,
+    val state: String
+)
+
+/** Storage owns the staging/active generation transaction; callers cannot partially publish an index. */
+interface DenseEmbeddingIndexStore {
+    suspend fun beginGeneration(
+        pack: InstalledCorpusPackRecord,
+        model: LocalEmbeddingModelDescriptor,
+        maximumTotalEncodedBytes: Long
+    ): String
+    suspend fun appendVectors(generationId: String, vectors: Map<String, QuantizedEmbeddingVector>): Long
+    suspend fun activateGeneration(generationId: String)
+    suspend fun abortGeneration(generationId: String)
+    suspend fun removePackVersion(packId: String, packVersion: String): Int
+    suspend fun recoverAbandonedGenerations(): Int
+    suspend fun activeGeneration(packId: String, packVersion: String, modelId: String, modelVersion: String): DenseIndexGeneration?
+    suspend fun vectorsFor(generationId: String, stableEvidenceKeys: List<String>): Map<String, QuantizedEmbeddingVector>
+}

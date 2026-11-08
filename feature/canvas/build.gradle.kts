@@ -1,10 +1,10 @@
+import com.android.build.api.dsl.LibraryExtension
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
-android {
+extensions.configure<LibraryExtension>("android") {
     namespace = "app.timeline.islamic.feature.canvas"
     compileSdk = 36
     defaultConfig { minSdk = 26 }
@@ -15,7 +15,7 @@ android {
     }
 }
 
-kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
+
 
 dependencies {
     implementation(platform(libs.androidx.compose.bom))

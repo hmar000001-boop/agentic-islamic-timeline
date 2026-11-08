@@ -1,6 +1,8 @@
 package app.timeline.islamic
 
 import android.app.Application
+import android.net.Uri
+import android.util.Base64
 import app.timeline.islamic.core.agent.AuditVerification
 import app.timeline.islamic.core.agent.UserConfirmation
 import app.timeline.islamic.core.agent.runtime.AgentStepProcessor
@@ -16,6 +18,27 @@ import app.timeline.islamic.core.persistence.RoomAgentTaskStore
 import app.timeline.islamic.core.persistence.RoomAuditLog
 import app.timeline.islamic.core.persistence.RoomAuthorizationStore
 import app.timeline.islamic.core.security.KeystoreAuditMacProvider
+import app.timeline.islamic.core.corpus.BouncyCastleEd25519Verifier
+import app.timeline.islamic.core.corpus.CorpusPackInstaller
+import app.timeline.islamic.core.corpus.CorpusPackLifecycleManager
+import app.timeline.islamic.core.corpus.CorpusPackRuntime
+import app.timeline.islamic.core.corpus.InstalledCorpusPackRevalidator
+import app.timeline.islamic.core.corpus.PinnedPublisherRoot
+import app.timeline.islamic.core.corpus.PublisherKeyringManager
+import app.timeline.islamic.core.corpus.PublisherKeyring
+import app.timeline.islamic.core.corpus.SafCorpusPackImporter
+import app.timeline.islamic.core.corpus.SafPublisherKeyringImporter
+import app.timeline.islamic.core.corpus.SignedPublisherKeyringArchiveImporter
+import app.timeline.islamic.core.persistence.RoomCorpusPackRegistry
+import app.timeline.islamic.core.persistence.RoomPublisherKeyringStore
+import app.timeline.islamic.core.persistence.RoomDenseEmbeddingIndexStore
+import app.timeline.islamic.core.retrieval.BundledSqliteCorpusIndex
+import app.timeline.islamic.core.retrieval.LocalEmbeddingIndexBuilder
+import app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord
+import app.timeline.islamic.core.knowledge.LocalTextEmbeddingModel
+import java.io.File
+import app.timeline.islamic.feature.corpus.CorpusManagementUiState
+import app.timeline.islamic.feature.corpus.CorpusPackUiItem
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -42,6 +65,53 @@ class TimelineApplication : Application() {
     }
     private val agentRecovery by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         AgentRecoveryCoordinator(taskStore, authorizationStore)
+    }
+
+    private data class PublisherRootConfiguration(val root: PinnedPublisherRoot?, val invalid: Boolean)
+
+    /** No default publisher key exists; an absent public root disables importing without quarantining packs. */
+    private val publisherRootConfiguration by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        runCatching {
+            val keyId = BuildConfig.CORPUS_PUBLISHER_ROOT_KEY_ID.trim()
+            val encoded = BuildConfig.CORPUS_PUBLISHER_ROOT_KEY_B64.trim()
+            if (keyId.isEmpty() && encoded.isEmpty()) PublisherRootConfiguration(null, false)
+            else {
+                require(keyId.isNotEmpty() && encoded.isNotEmpty()) { "Publisher root key configuration is incomplete" }
+                val rawKey = Base64.decode(encoded, Base64.DEFAULT)
+                PublisherRootConfiguration(PinnedPublisherRoot(keyId, rawKey), false)
+            }
+        }.getOrElse { PublisherRootConfiguration(null, true) }
+    }
+    private val corpusSignatureVerifier by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { BouncyCastleEd25519Verifier() }
+    private val corpusRegistry by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { RoomCorpusPackRegistry(database) }
+    private val corpusLifecycle by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { CorpusPackLifecycleManager(this, corpusRegistry) }
+    private val publisherKeyringManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        publisherRootConfiguration.root?.let { root ->
+            PublisherKeyringManager(root, RoomPublisherKeyringStore(database), corpusSignatureVerifier)
+        }
+    }
+    private val corpusKeyring: PublisherKeyring by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        publisherKeyringManager ?: PublisherKeyring { null }
+    }
+    private val corpusIndex by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { BundledSqliteCorpusIndex() }
+    /** Embeddings are derived text data and therefore stay inside the SQLCipher Room database. */
+    private val denseEmbeddingIndexStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        RoomDenseEmbeddingIndexStore(database)
+    }
+    private val corpusInstaller by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        CorpusPackInstaller(this, corpusKeyring, corpusSignatureVerifier, corpusIndex, corpusRegistry)
+    }
+    private val corpusRevalidator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        publisherKeyringManager?.let { manager ->
+            InstalledCorpusPackRevalidator(this, corpusRegistry, manager, corpusSignatureVerifier, corpusIndex)
+        }
+    }
+    private val corpusRuntime by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        val manager = publisherKeyringManager
+        val revalidator = corpusRevalidator
+        if (manager != null && revalidator != null) {
+            CorpusPackRuntime(manager, corpusInstaller, corpusLifecycle, revalidator)
+        } else null
     }
 
     /** Must complete before any agent work is scheduled or an action executor is exposed. */
@@ -96,4 +166,97 @@ class TimelineApplication : Application() {
         check(agentRuntimeReady) { "Agent runtime is not initialized" }
         return ToolExecutionGateway(authorizationEngine, handlers)
     }
+
+    /** Initializes trusted corpus lifecycle only when a root key was actually pinned in the build. */
+    suspend fun loadCorpusManagementState(): CorpusManagementUiState {
+        return try {
+            val root = publisherRootConfiguration
+            var summary: String? = null
+            denseEmbeddingIndexStore.recoverAbandonedGenerations()
+            if (root.root != null) {
+                val report = corpusRuntime?.initialize()
+                if (report != null) {
+                    summary = "Checked ${report.revalidation.checked}; healthy ${report.revalidation.healthy}; quarantined ${report.revalidation.quarantined}; restored ${report.revalidation.restored}."
+                }
+            } else {
+                // Without a pinned publisher root, do recovery that does not require trust decisions,
+                // but never run the revalidator and accidentally quarantine every existing pack.
+                corpusLifecycle.recoverPendingRemovals()
+                corpusInstaller.removeUnregisteredPackDirectories()
+            }
+            cleanupDenseIndexesForInactivePacks()
+            val manager = publisherKeyringManager
+            val packs = corpusRegistry.listAll().map { record ->
+                CorpusPackUiItem(record.packId, record.version, record.status, record.licenseProfile, record.manifestSha256)
+            }.sortedWith(compareBy(CorpusPackUiItem::packId, CorpusPackUiItem::version))
+            CorpusManagementUiState(
+                loading = false,
+                publisherRootConfigured = root.root != null,
+                publisherRootConfigurationInvalid = root.invalid,
+                keyringReady = manager?.isReady() == true,
+                keyringVersion = manager?.version() ?: 0L,
+                packCount = packs.size,
+                packs = packs,
+                lastRevalidationSummary = summary
+            )
+        } catch (failure: Exception) {
+            CorpusManagementUiState(
+                loading = false,
+                publisherRootConfigured = publisherRootConfiguration.root != null,
+                publisherRootConfigurationInvalid = publisherRootConfiguration.invalid,
+                keyringReady = publisherKeyringManager?.isReady() == true,
+                keyringVersion = publisherKeyringManager?.version() ?: 0L,
+                packs = runCatching { corpusRegistry.listAll().map { CorpusPackUiItem(it.packId, it.version, it.status, it.licenseProfile, it.manifestSha256) } }.getOrDefault(emptyList()),
+                message = failure::class.simpleName ?: "CORPUS_INITIALIZATION_FAILED"
+            )
+        }
+    }
+
+    suspend fun importPublisherKeyring(uri: Uri): Long {
+        val manager = publisherKeyringManager ?: error("A valid pinned publisher root is not configured")
+        val importer = SignedPublisherKeyringArchiveImporter(manager)
+        val version = SafPublisherKeyringImporter(this, importer).import(uri)
+        corpusRuntime?.revalidateAfterTrustUpdate()
+        cleanupDenseIndexesForInactivePacks()
+        return version
+    }
+
+    suspend fun importCorpusPack(uri: Uri) {
+        check(publisherKeyringManager?.isReady() == true) { "A verified publisher keyring is required before pack import" }
+        SafCorpusPackImporter(this, corpusInstaller).import(uri)
+        cleanupDenseIndexesForInactivePacks()
+    }
+
+    suspend fun updateCorpusPack(uri: Uri, packId: String, expectedCurrentVersion: String) {
+        check(publisherKeyringManager?.isReady() == true) { "A verified publisher keyring is required before pack update" }
+        val activeBefore = corpusRegistry.listInstalled().singleOrNull { it.packId == packId && it.version == expectedCurrentVersion }
+            ?: error("Expected active corpus pack version is no longer installed")
+        SafCorpusPackImporter(this, corpusInstaller).update(uri, expectedCurrentVersion)
+        denseEmbeddingIndexStore.removePackVersion(activeBefore.packId, activeBefore.version)
+        cleanupDenseIndexesForInactivePacks()
+    }
+
+    suspend fun removeCorpusPack(packId: String, version: String): Boolean {
+        val removed = corpusLifecycle.remove(packId, version)
+        if (removed) denseEmbeddingIndexStore.removePackVersion(packId, version)
+        return removed
+    }
+
+
+    /** Dense vectors are derived from corpus text and may only remain for active trusted packs. */
+    private suspend fun cleanupDenseIndexesForInactivePacks() {
+        corpusRegistry.listAll()
+            .filter { it.status != InstalledCorpusPackRecord.STATUS_INSTALLED }
+            .forEach { record -> denseEmbeddingIndexStore.removePackVersion(record.packId, record.version) }
+    }
+
+    suspend fun buildLocalEmbeddingIndex(packId: String, version: String, model: LocalTextEmbeddingModel): LocalEmbeddingIndexBuilder.Result {
+        require(publisherKeyringManager?.isReady() == true) { "A verified publisher keyring is required before indexing corpus passages" }
+        corpusRuntime?.initialize()
+        val record = corpusRegistry.listInstalled().singleOrNull { it.packId == packId && it.version == version }
+            ?: error("The requested corpus pack version is not installed and active")
+        val indexFile = File(File(filesDir, "corpus-packs"), record.relativeIndexPath)
+        return LocalEmbeddingIndexBuilder(corpusIndex, denseEmbeddingIndexStore).build(record, indexFile, model)
+    }
+
 }

@@ -140,3 +140,50 @@ import kotlinx.coroutines.flow.Flow
     @Query("SELECT * FROM publisher_keyring_state WHERE id = 'publisher-root' LIMIT 1") suspend fun current(): PublisherKeyringStateEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(state: PublisherKeyringStateEntity)
 }
+
+@Dao interface DenseIndexDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertGeneration(generation: DenseIndexGenerationEntity)
+
+    @Query("SELECT * FROM dense_index_generation WHERE generationId = :generationId LIMIT 1")
+    suspend fun generation(generationId: String): DenseIndexGenerationEntity?
+
+    @Query("SELECT COALESCE(SUM(encodedBytes), 0) FROM dense_index_generation WHERE state IN ('ACTIVE','STAGING')")
+    suspend fun totalEncodedBytes(): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertVectors(vectors: List<DenseIndexVectorEntity>)
+
+    @Query("UPDATE dense_index_generation SET vectorCount = vectorCount + :count, encodedBytes = encodedBytes + :bytes WHERE generationId = :generationId AND state = 'STAGING'")
+    suspend fun addGenerationBytes(generationId: String, count: Long, bytes: Long): Int
+
+    @Query("UPDATE dense_index_generation SET state = 'RETIRED' WHERE packId = :packId AND packVersion = :packVersion AND modelId = :modelId AND modelVersion = :modelVersion AND state = 'ACTIVE'")
+    suspend fun retireActiveGeneration(packId: String, packVersion: String, modelId: String, modelVersion: String): Int
+
+    @Query("UPDATE dense_index_generation SET state = 'ACTIVE' WHERE generationId = :generationId AND state = 'STAGING' AND vectorCount > 0")
+    suspend fun activateStagingGeneration(generationId: String): Int
+
+    @Query("DELETE FROM dense_index_generation WHERE packId = :packId AND packVersion = :packVersion AND modelId = :modelId AND modelVersion = :modelVersion AND state = 'RETIRED'")
+    suspend fun deleteRetiredGenerations(packId: String, packVersion: String, modelId: String, modelVersion: String): Int
+
+    @Query("DELETE FROM dense_index_generation WHERE generationId = :generationId AND state = 'STAGING'")
+    suspend fun deleteStagingGeneration(generationId: String): Int
+
+    @Query("SELECT COUNT(*) FROM dense_index_generation WHERE state = 'STAGING'")
+    suspend fun countStagingGenerations(): Int
+
+    @Query("DELETE FROM dense_index_generation WHERE state = 'STAGING'")
+    suspend fun deleteAllStagingGenerations(): Int
+
+    @Query("SELECT * FROM dense_index_generation WHERE packId = :packId AND packVersion = :packVersion AND modelId = :modelId AND modelVersion = :modelVersion AND state = 'ACTIVE' LIMIT 1")
+    suspend fun activeGeneration(packId: String, packVersion: String, modelId: String, modelVersion: String): DenseIndexGenerationEntity?
+
+    @Query("SELECT * FROM dense_index_vector WHERE generationId = :generationId AND stableEvidenceKey IN (:keys)")
+    suspend fun vectors(generationId: String, keys: List<String>): List<DenseIndexVectorEntity>
+
+    @Query("SELECT COUNT(*) FROM dense_index_generation WHERE packId = :packId AND packVersion = :packVersion")
+    suspend fun countPackGenerations(packId: String, packVersion: String): Int
+
+    @Query("DELETE FROM dense_index_generation WHERE packId = :packId AND packVersion = :packVersion")
+    suspend fun deletePackGenerations(packId: String, packVersion: String): Int
+}

@@ -22,4 +22,14 @@ object AppDatabaseMigrations {
             database.execSQL("CREATE TABLE IF NOT EXISTS publisher_keyring_state (id TEXT NOT NULL PRIMARY KEY, version INTEGER NOT NULL, payload BLOB NOT NULL, signature BLOB NOT NULL, installedAtEpochMillis INTEGER NOT NULL)")
         }
     }
+    /** Phase 4C stores local dense-index generations and int8 vectors inside SQLCipher-protected Room. */
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("CREATE TABLE IF NOT EXISTS dense_index_generation (generationId TEXT NOT NULL PRIMARY KEY, packId TEXT NOT NULL, packVersion TEXT NOT NULL, modelId TEXT NOT NULL, modelVersion TEXT NOT NULL, modelSha256 TEXT NOT NULL, dimension INTEGER NOT NULL, vectorCount INTEGER NOT NULL, encodedBytes INTEGER NOT NULL, maximumEncodedBytes INTEGER NOT NULL, state TEXT NOT NULL, createdAtEpochMillis INTEGER NOT NULL)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_dense_index_generation_packId_packVersion_modelId_modelVersion_state ON dense_index_generation(packId, packVersion, modelId, modelVersion, state)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_dense_index_generation_state ON dense_index_generation(state)")
+            database.execSQL("CREATE TABLE IF NOT EXISTS dense_index_vector (generationId TEXT NOT NULL, stableEvidenceKey TEXT NOT NULL, vector BLOB NOT NULL, PRIMARY KEY(generationId, stableEvidenceKey), FOREIGN KEY(generationId) REFERENCES dense_index_generation(generationId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_dense_index_vector_generationId ON dense_index_vector(generationId)")
+        }
+    }
 }

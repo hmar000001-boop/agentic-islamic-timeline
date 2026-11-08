@@ -37,6 +37,10 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "platforms;android-37.0" "build-tools;36.0.0" "emulator" "system-images;android-36;google_apis;x86_64"
           python3 scripts/verify-android-sdk-platform.py
+      - name: Verify complete English and Arabic string resources
+        run: |
+          python3 scripts/test-string-translations.py
+          python3 scripts/verify-string-translations.py
       - name: Scan source for common secret patterns
         run: python3 scripts/secret-scan.py
       - name: Validate Phase 4 Room v5 and encrypted dense-index migrations

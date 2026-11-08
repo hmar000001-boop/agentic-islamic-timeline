@@ -1,6 +1,10 @@
+## 0.5.8 CI correction — English resource lint completeness
+
+The last hosted run successfully assembled `:app:assembleOfflineSideloadDebug` and passed lint for `core:corpus`, `core:retrieval`, and `feature:corpus-management`. App lint then reported three `MissingTranslation` errors: `app_nav_timeline`, `app_nav_canvas`, and `app_nav_corpus` existed in default and Arabic resources but were absent from the app's explicit `values-en/strings.xml`. All three English entries are now present. The corpus-management feature also now has an explicit English resource file matching its default English set. CI runs translation parity tests and a verifier before Gradle, checking both locale key sets and format placeholders without disabling lint.
+
 # Timeline Agentique
 
-**Version:** `0.5.7-phase4c-app-compile-fix`
+**Version:** `0.5.8-phase4c-english-resource-lint-fix`
 
 ## 0.5.7 CI correction — app compile classpath and symbols
 
@@ -32,7 +36,7 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.7-phase4c-app-compile-fix`
+**Current source version:** `0.5.8-phase4c-english-resource-lint-fix`
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
 **Package ID:** provisional `app.timeline.islamic`

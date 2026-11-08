@@ -1,3 +1,10 @@
+## 0.5.8-phase4c-english-resource-lint-fix — 2026-11-08
+- Fixed the three blocking `MissingTranslation` lint errors reported by the hosted `:app:lintOfflineSideloadDebug` task. The app's explicit `values-en/strings.xml` was missing `app_nav_timeline`, `app_nav_canvas`, and `app_nav_corpus`; added the existing English labels `Timeline`, `Canvas`, and `Knowledge`.
+- Added a complete explicit `values-en/strings.xml` for `feature:corpus-management`, matching its existing default English resource set and Arabic translation rather than relying on fallback for this new feature.
+- Added `scripts/verify-string-translations.py` and regression tests. CI now verifies that every translatable Android string resource has matching English and Arabic keys and matching formatted placeholders. It rejects missing/extra resources, missing locale files, and format-argument mismatches; it does not suppress Android lint.
+- Kept English as the default resource language, Arabic as the second launch language, compileSdk 37.0, targetSdk 36, minSdk 26, API 36 emulator, Room schema v5, encryption, corpus trust, retrieval and application behavior unchanged.
+- App versionCode is 12 and versionName is `0.5.8-phase4c-english-resource-lint-fix`. The next hosted CI run must confirm app lint now passes and reveal any other lint findings; this authoring workspace cannot run Android Gradle lint.
+
 ## 0.5.7-phase4c-app-compile-fix — 2026-11-08
 - Fixed the next real GitHub Actions app Kotlin compilation errors after `:core:persistence:compileDebugKotlin` and `:core:persistence:testDebugUnitTest` succeeded.
 - Removed the explicit `androidx.compose.foundation.layout.weight` import from `MainActivity`; `Modifier.weight` is a `ColumnScope` member extension and is resolved inside the `Column` content receiver. Importing it as a top-level extension caused Kotlin to bind to an inaccessible internal `RowColumnParentData?.weight` symbol.

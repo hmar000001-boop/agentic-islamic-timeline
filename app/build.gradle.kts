@@ -12,13 +12,13 @@ fun buildConfigString(value: String): String = "\"${value.replace("\\", "\\\\").
 
 extensions.configure<ApplicationExtension>("android") {
     namespace = "app.timeline.islamic"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = "app.timeline.islamic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.5.1-phase4c-buildconfig-fix"
+        versionCode = 7
+        versionName = "0.5.2-phase4c-compile-sdk37"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     flavorDimensions += "distribution"

@@ -6,7 +6,7 @@ plugins {
 
 extensions.configure<LibraryExtension>("android") {
     namespace = "app.timeline.islamic.feature.canvas"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig { minSdk = 26 }
     buildFeatures { compose = true }
     compileOptions {

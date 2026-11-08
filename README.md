@@ -1,6 +1,18 @@
+# Timeline Agentique
+
+**Version:** `0.5.2-phase4c-compose-api37`  
+**Android:** minSdk 26 · compileSdk 37 · targetSdk 36  
+**Build:** AGP 9.3.1 · Gradle 9.5.0 · Kotlin 2.4.21 · KSP 2.3.13
+
+## 0.5.2 CI correction — Compose API 37
+
+The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artifacts require `compileSdk 37`. All 15 Android modules now compile against API 37. The app's `targetSdk` remains 36 and CI keeps the API 36 emulator for runtime compatibility tests; compile SDK and target SDK serve different purposes. CI installs Android SDK Platforms 36 and 37.
+
+`python3 scripts/verify-compose-compile-sdk.py` checks this split and is executed by GitHub Actions.
+
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Version:** `0.5.1-phase4c-buildconfig-nullability-fix`  
+**Current source version:** `0.5.2-phase4c-compose-api37`  
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`  
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`  
 **Package ID:** provisional `app.timeline.islamic`  
@@ -16,7 +28,7 @@ The authoring environment still has no installed Gradle distribution or Android 
 
 - The original Android application and all prior Timeline, Canvas, task runtime, authorization, encrypted persistence, corpus, publisher-trust and retrieval work are preserved. This is not a replacement project.
 - Fifteen Gradle modules: `app`; `core:common`, `core:timeline-api`, `core:agent-api`, `core:authorization`, `core:agent-runtime`, `core:security`, `core:localization`, `core:persistence`, `core:knowledge-api`, `core:corpus`, `core:retrieval`; `feature:timeline`, `feature:canvas`, and `feature:corpus-management`.
-- Android min API 26, compile/target API 36, Java 17 bytecode target. Offline sideload and Play-distribution flavors both currently have no INTERNET permission; Play AI Delivery is not integrated.
+- Android min API 26, compile API 37 / target API 36, Java 17 bytecode target. Offline sideload and Play-distribution flavors both currently have no INTERNET permission; Play AI Delivery is not integrated.
 - SQLCipher-protected Room schema v5 with 27 registered entities and explicit migrations 1→2→3→4→5. Keystore-wrapped random database key, fail-closed recovery, no plaintext fallback.
 - Existing daily Timeline, task/habit entry and completion, Canvas create/edit/archive/snapshots, Arabic/English resource sets and RTL-capable layouts.
 - Phase 3 persistent one-step agent runtime, owner/fencing-token leases, approvals, narrowly scoped Hifz interval grant, execution gateway, crash reconciliation and Keystore HMAC audit chain. No production OS action adapter is registered by this source tranche.
@@ -99,4 +111,4 @@ For initial dependency lock generation on a network-enabled host, run the CI wor
 - Project Library folder: `/Timeline_Agentique/`
 - Immutable ZIPs and SHA-256 files are versioned; do not overwrite earlier deliveries.
 - Every meaningful tranche has a new checkpoint under `docs/checkpoints/` and report under `docs/reports/`.
-- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-08_phase4c-builtin-kotlin.md` for the next implementation.
+- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-08_phase4c-compose-api37.md` for the next implementation.

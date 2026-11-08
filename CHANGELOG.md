@@ -96,3 +96,12 @@
 - The bootstrap now restores recorded Unix modes from the checksum-verified official distribution, explicitly sets the Gradle launcher executable after extraction, and repairs an existing cached launcher before testing `-x`.
 - Added `scripts/test-gradle-bootstrap.py`, which creates a realistic non-executable cached launcher and verifies that `./gradlew --version` can execute it without network access; CI runs this regression before distribution verification.
 - No application, Room schema, corpus, retrieval, authorization or agent-runtime behavior changed. Full GitHub Actions Gradle build remains pending this hotfix run.
+
+## 0.5.2-phase4c-compose-api37 — 2026-11-08
+
+- Updated all 15 Android modules to `compileSdk = 37` to satisfy Jetpack Compose 1.12.1 AAR metadata selected by Compose BOM `2026.09.00`.
+- Kept the app `targetSdk = 36`, `minSdk = 26`, API 36 CI emulator, and Android 36 runtime compatibility test lane unchanged.
+- Updated GitHub Actions to install both Android SDK Platform 37 (compile) and Platform 36 (runtime/emulator), retaining Build Tools 36.0.0.
+- Added `scripts/verify-compose-compile-sdk.py` and a CI step to enforce the compile/target/emulator split across all 15 Android modules.
+- No application behavior, permission, API target, data schema, or Phase 4 corpus logic changed.
+- CI log diagnosis: Kotlin compilation and Room KSP began; the build then failed at `:app:checkOfflineSideloadDebugAarMetadata` because 11 Compose 1.12.1 AARs require compileSdk 37. This is a compile-time metadata issue, not a Kotlin source failure.

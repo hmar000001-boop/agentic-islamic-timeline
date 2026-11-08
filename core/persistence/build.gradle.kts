@@ -7,6 +7,7 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:timeline-api"))
     implementation(project(":core:agent-api"))
+    implementation(project(":core:knowledge-api"))
     implementation(project(":core:security"))
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

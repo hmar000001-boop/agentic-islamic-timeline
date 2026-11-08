@@ -123,7 +123,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao interface InstalledArtifactDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putCorpusPack(pack: InstalledCorpusPackEntity)
-    @Query("SELECT * FROM installed_corpus_pack ORDER BY installedAtEpochMillis DESC") suspend fun corpusPacks(): List<InstalledCorpusPackEntity>
+    @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertCorpusPack(pack: InstalledCorpusPackEntity)
+    @Query("SELECT * FROM installed_corpus_pack WHERE packId = :packId AND version = :version LIMIT 1") suspend fun corpusPack(packId: String, version: String): InstalledCorpusPackEntity?
+    @Query("SELECT * FROM installed_corpus_pack WHERE status = 'INSTALLED' ORDER BY installedAtEpochMillis DESC") suspend fun corpusPacks(): List<InstalledCorpusPackEntity>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putModel(model: InstalledModelEntity)
     @Query("SELECT * FROM installed_model ORDER BY installedAtEpochMillis DESC") suspend fun models(): List<InstalledModelEntity>
 }

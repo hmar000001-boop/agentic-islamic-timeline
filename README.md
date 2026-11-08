@@ -1,6 +1,6 @@
-# Timeline agentique — Android source foundation (Phases 1–3)
+# Timeline agentique — Android source foundation (Phases 1–4A)
 
-**Version:** `0.3.1-phase3-ci-fix`  
+**Version:** `0.4.0-phase4-knowledge-foundation`  
 **Architecture:** `Cahier_architecture_Timeline_agentique_v1.2.md`  
 **Readiness:** `Rapport_final_readiness_demarrage_Timeline_agentique.md`  
 **Package ID:** provisional `app.timeline.islamic`  
@@ -8,7 +8,7 @@
 
 ## What is actually in this archive
 
-- Multi-module Android project: `app`, `core:common`, `core:timeline-api`, `core:agent-api`, `core:authorization`, `core:agent-runtime`, `core:security`, `core:localization`, and `core:persistence`.
+- Incremental multi-module Android project: `app`, `core:common`, `core:timeline-api`, `core:agent-api`, `core:authorization`, `core:agent-runtime`, `core:security`, `core:localization`, `core:persistence`, `core:knowledge-api`, `core:corpus`, `core:retrieval`, `feature:timeline`, and `feature:canvas`.
 - Android API baseline: min 26, compile/target 36; Java/Kotlin bytecode target 17.
 - Offline and Play-distribution product flavors. Both currently have **no INTERNET permission**; Play AI Delivery is not integrated.
 - Room 2 schema v3 (**24 user-state tables; explicit migrations 1→2 and 2→3**), DAO set, Timeline repository adapter, SQLCipher Room 2 helper factory, Keystore-wrapped random database passphrase.
@@ -27,7 +27,12 @@
 - Crash policy: abandoned `CLAIMED` records are aborted before effect; abandoned `EXECUTING` records become `OUTCOME_UNKNOWN`; neither is automatically replayed. Known `VERIFIED`/`FAILED` outcomes requeue only when the reporting worker still owns the matching fencing token.
 - HMAC-SHA256 audit chain using an Android Keystore key; audit verification runs before app-level agent entry points are enabled. Payload values are hashed rather than copied into the audit table.
 - GitHub Actions workflow for build, unit tests, lint, merged-manifest permission audit, manually booted API 36 emulator instrumentation, dependency report, secret-pattern scan, and CycloneDX SBOM. Action references are pinned to a commit SHA.
-- CI hotfix `0.3.1`: JDK setup now validates the preinstalled JDK path and writes only the valid `JAVA_HOME=VALUE` assignment to `GITHUB_ENV`; it no longer emits a bare path that GitHub Actions rejects as an invalid environment-file record.
+- CI hotfix `0.3.1`: JDK setup validates the preinstalled JDK path and writes only the valid `JAVA_HOME=VALUE` assignment to `GITHUB_ENV`.
+- Phase 4A knowledge API: source/edition/provenance/licensing/review metadata, immutable original evidence passages, language and four-madhhab filters, Arabic/English search normalization, and deterministic SHA-256 evidence identities.
+- Phase 4A Corpus Pack format v1: canonical UTF-8 manifest, Ed25519 signatures over exact manifest bytes, SHA-256 index binding, strict ZIP entry allowlist, bounded extraction, bundled-SQLite/FTS5 validation, app-private staging and atomic installation, and Room registry adapter using the existing table (no schema migration).
+- Phase 4A retrieval: bundled SQLite FTS5/BM25 with external-content index integrity validation, per-pack lexical channels, optional local dense-retriever contract, rank-only Reciprocal Rank Fusion, source/license/review/madhhab and stable-citation rechecks, evidence-text hash rechecks, and an explicit trace for dense-provider failure that never reports RRF score as confidence or claims an unavailable reranker.
+- Phase 4A tests: focused JVM tests for request eligibility, canonical manifests, Ed25519 vectors, RRF and retrieval fallback; Android instrumentation source tests for bundled SQLite FTS5/index integrity and pack installation rejection/rollback paths.
+- The Corpus Pack installer deliberately fails closed until the app supplies a pinned publisher keyring. No publisher private key or unlicensed religious corpus content is included in this archive.
 
 ## Honest verification status
 
@@ -47,7 +52,7 @@ Static repository checks, file inventory, manifest permission checks, script syn
 | Compose BOM | 2026.09.00 | architecture snapshot |
 | Room | 2.8.5 | KSP generation |
 | SQLCipher Android | 4.20.0 | Room 2 `SupportOpenHelperFactory` integration; verification gate |
-| AndroidX SQLite | 2.7.0 | SQLCipher integration candidate |
+| AndroidX SQLite | 2.7.1 | Bundled SQLite driver for FTS5 corpus indexes; separate from the Room/SQLCipher user database |
 | DataStore | 1.2.1 | locale preference |
 
 AGP 9 built-in Kotlin is explicitly disabled in `gradle.properties` to allow the pinned standalone Kotlin Gradle Plugin 2.4.21 and Compose compiler plugin to be used consistently. This is a transitional compatibility choice, not an architectural dependency; migrate to AGP built-in Kotlin only after confirming the exact AGP/Kotlin/KSP/Compose toolchain in CI.
@@ -58,8 +63,10 @@ AGP 9 built-in Kotlin is explicitly disabled in `gradle.properties` to allow the
 ./gradlew --version
 ./gradlew :app:assembleOfflineSideloadDebug
 ./gradlew :app:testOfflineSideloadDebugUnitTest
+./gradlew :core:knowledge-api:testDebugUnitTest :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest
 ./gradlew :app:lintOfflineSideloadDebug
 ./gradlew :app:connectedOfflineSideloadDebugAndroidTest
+./gradlew :core:corpus:connectedDebugAndroidTest :core:retrieval:connectedDebugAndroidTest
 ./gradlew cyclonedxBom
 ```
 
@@ -96,7 +103,7 @@ The Timeline and Canvas are now real Room-backed feature modules, but this is th
 
 Phase 3 now implements the persistent task runtime, authorization decision service, approval/grant lifecycle, atomic execution gate, Room outbox transitions and startup reconciliation. It does not yet include production OS tool adapters, a model-driven `AgentStepProcessor`, tool registry population, decision-card UI, or WorkManager scheduling. No external action type is currently registered by the app, so this tranche cannot mutate Calendar/Contacts/files or other Android resources by itself. The processor and tool-handler interfaces are extension points, not simulated integrations.
 
-Still not implemented: corpus importer, signed packs, RAG retrieval, model manager, LiteRT-LM, OCR, ASR, prayer calculations, Hifz evaluation, notifications, recurring habits, or any religious verdict. These remain later implementation tranches and release gates. The Hifz persistent grant is intentionally the only grant type in Phase 3, for `hifz.adjust_review_interval` only, exact plan/revision/schedule fingerprint, bounded delta, 30-day maximum lifetime and active policy version `hifz-interval.v1`. Grant-authoring UI and a user-confirmation workflow to issue a grant are not wired into the application yet.
+Phase 4A now provides the first signed local corpus-pack and lexical retrieval foundation. It is not the completion of Phase 4. Still not implemented: a production publisher keyring and key-rotation process; pack authoring/curation/signing tooling; vector embedding generation and local vector index/search; a concrete local dense-retrieval provider; a benchmarked reranker; app-level SAF import and pack-management UI; evidence/citation cards; scholarly review workflows; model manager/LiteRT-LM; OCR/ASR; prayer calculations; Hifz evaluation; notifications; recurring habits; or religious verdict generation. These remain later implementation tranches and release gates. The Hifz persistent grant is intentionally the only grant type in Phase 3, for `hifz.adjust_review_interval` only, exact plan/revision/schedule fingerprint, bounded delta, 30-day maximum lifetime and active policy version `hifz-interval.v1`. Grant-authoring UI and a user-confirmation workflow to issue a grant are not wired into the application yet.
 
 ## Continuity and checkpoints
 
@@ -115,6 +122,18 @@ Still not implemented: corpus importer, signed packs, RAG retrieval, model manag
 - A known action result requeues the task only if the reporting claim still matches the current fencing token. A stale worker may record its execution result but cannot mutate a newer worker's task state.
 - The HMAC audit chain detects modified/reordered records and missing historical Keystore keys. It does not provide an independent anti-truncation anchor: deletion of the entire tail (or entire table) cannot be proven from the local chain alone. Do not call it tamper-proof.
 - `agentRuntimeReady` is set only after full audit verification and recovery. App-level task, approval and gateway entry points check this gate. Initialization is mutex-protected and cached once per process so Activity recreation cannot reconcile a still-live `EXECUTING` operation as a crashed one. A new process performs recovery again.
+
+## Phase 4A — knowledge and retrieval foundation
+
+- `:core:knowledge-api` owns source metadata, evidence passage and retrieval contracts. It keeps `originalText` separate from `normalizedText`; original quotations are never replaced by search normalization.
+- `:core:corpus` parses the canonical Corpus Pack v1 manifest and installs the exact three-entry archive (`manifest.txt`, `manifest.sig`, `corpus.sqlite`). The Ed25519 signature covers exact manifest bytes; the signed manifest binds the SQLite index SHA-256. ZIP traversal, duplicate entries, unexpected entries, size overflow and non-atomic installation are rejected.
+- `:core:retrieval` uses `BundledSQLiteDriver` / FTS5, not the device's framework SQLite build. Each corpus database contributes its own lexical ranking channel; raw BM25 values from independent databases are never compared. RRF operates on one-based ranks and outputs a ranking utility, not a probability/confidence.
+- Every source in an installable pack must have explicitly cleared redistribution rights and approved scholarly review metadata. Import validates the source eligibility window, language and madhhab enums, stable evidence identity and exact UTF-8 SHA-256 of each original passage. Retrieval rechecks eligibility, language, madhhab and original-text hash.
+- Null madhhab means no school-specific exclusion. Selecting a school retains `ALL` and `COMPARATIVE` passages in addition to that school; other school-specific passages are excluded.
+- The Room `installed_corpus_pack` table is reused; Room schema remains v3 / 24 entities. Corpus indexes are separate immutable app-private SQLite files, not user-state databases.
+- The format and local index code are implemented, but this application build currently has no pinned production publisher keys, no signed content packs, no app SAF screen/wiring, and no dense-vector index/provider or reranker. Consequently no real Quran/hadith/tafsir/fiqh content is bundled or claimed as licensed/approved.
+
+See [`docs/phase4/corpus-pack-format-v1.md`](docs/phase4/corpus-pack-format-v1.md) for the pack contract and [`docs/phase4/phase4a-implementation.md`](docs/phase4/phase4a-implementation.md) for scope and remaining gates.
 
 ## Phase 2 implementation status
 

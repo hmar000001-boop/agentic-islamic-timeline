@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0-phase4-knowledge-foundation — 2026-11-08
+- Continued incrementally from the immutable Phase 3.0.1 source; retained Timeline, Canvas, authorization, agent runtime and Room schema v3.
+- Added `:core:knowledge-api` source/evidence/retrieval contracts, explicit four-madhhab filtering with no implicit default, Arabic/English search normalization, source eligibility gates, exact original-text hashing, and deterministic edition/locator/language evidence keys.
+- Added `:core:corpus` canonical signed-manifest codec, Ed25519 verification adapter using Bouncy Castle lightweight API, publisher keyring contract, bounded ZIP importer, signed-index SHA-256 validation, fail-closed key trust, atomic app-private installation, and crash-orphan cleanup.
+- Added `:core:retrieval` bundled SQLite FTS5/BM25 index validation and search, independent per-pack lexical channels, optional local dense-retriever contract, rank-only RRF fusion, provenance-aware deduplication, and explicit retrieval diagnostics.
+- Added `RoomCorpusPackRegistry` on the existing `installed_corpus_pack` table; no Room schema migration (schema remains v3 / 24 entities).
+- Added canonical manifest, Ed25519 RFC 8032 vector, source-eligibility, stable-evidence-identity, RRF and local retrieval fallback tests; 20 focused JVM test methods passed under the local Kotlin/JUnit/coroutine shim harness.
+- Added six executable corpus-installer filesystem tests under a lightweight Context shim, covering signature/key rejection, path rejection, registry rollback and metadata retention; Android instrumentation source now contains 12 test methods across corpus/retrieval.
+- Hardened pack validation to recompute every original passage SHA-256, normalized text and stable source/edition/locator/language evidence key before installation; validates external-content FTS5 postings and orphan source rows.
+- Hardened retrieval to reject inconsistent stable identities/normalized text, filter future-dated license/review metadata before candidate limiting, isolate dense channel IDs and report dense-provider failure while retaining eligible lexical fallback; RRF tie ordering is input-order independent.
+- Local verification includes Kotlin syntax compilation against temporary API shims, 10 focused Kotlin harness assertions, 20 shim-run JVM test methods, six shim-executed installer filesystem tests, SQLite schema/FTS5/foreign-key/integrity/time-filter smoke checks, and SHA/hash/identity fixture checks. This does not substitute for Gradle, AndroidX runtime, the resolved Bouncy Castle dependency, Android instrumentation or device tests; these remain unrun in this authoring environment.
+- Release blockers: production publisher public keys are not pinned; there are no signed/rights-cleared scholarly corpus packs included; pack update/revocation management, SAF UI, local vector retrieval, reranking, citation UI and scholarly governance tooling remain outstanding.
+
 ## 0.3.1-ci-fix — 2026-11-07
 - Fixed the Android CI JDK selection step: `GITHUB_ENV` now receives only a valid `JAVA_HOME=VALUE` record; the previous bare-path line caused the runner to fail with `Invalid format '/usr/lib/jvm/temurin-17-jdk-amd64'` after Java 17 had already launched successfully.
 - Added explicit checks that `JAVA_HOME_17_X64` is set and that its `bin/java` executable exists before exporting it.

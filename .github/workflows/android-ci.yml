@@ -41,9 +41,9 @@ jobs:
       - name: Verify Gradle distribution
         run: ./gradlew --version
       - name: Unit tests
-        run: ./gradlew --no-daemon :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest
+        run: ./gradlew --no-daemon :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :core:knowledge-api:testDebugUnitTest :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest
       - name: Assemble and lint
-        run: ./gradlew --no-daemon :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug
+        run: ./gradlew --no-daemon :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug :core:corpus:lint :core:retrieval:lint
       - name: Audit offline merged manifest
         run: |
           ./gradlew --no-daemon :app:processOfflineSideloadDebugMainManifest
@@ -71,7 +71,7 @@ jobs:
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
       - name: Instrumented Android tests
-        run: ./gradlew --no-daemon :app:connectedOfflineSideloadDebugAndroidTest :core:persistence:connectedDebugAndroidTest
+        run: ./gradlew --no-daemon :app:connectedOfflineSideloadDebugAndroidTest :core:persistence:connectedDebugAndroidTest :core:corpus:connectedDebugAndroidTest :core:retrieval:connectedDebugAndroidTest
       - name: Dependency resolution report
         if: always()
         run: ./gradlew --no-daemon :app:dependencies --configuration offlineSideloadDebugRuntimeClasspath > dependency-report.txt

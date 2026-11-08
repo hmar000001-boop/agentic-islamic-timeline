@@ -1,4 +1,9 @@
+## 0.5.10 CI correction — API 36 emulator test fixtures
+
+The next GitHub Actions run exposed two failures in the emulator setup regression tests, not in the emulator startup path itself. The missing-ADB test inherited the runner's valid job-level `ADB` override, so it reached a later missing-emulator check. It now explicitly points to the missing `platform-tools/adb` path in its temporary SDK. The successful-startup fake emulator had exited immediately; it now remains alive while ADB reports a booted device and is terminated in a `finally` cleanup path. Production early-exit detection and boot deadlines remain intact. The regression suite passes 6/6 locally; a hosted run must still verify real API 36 boot and instrumentation.
+
 ## 0.5.9 CI correction — API 36 emulator adb discovery
+
 
 The supplied hosted-runner log showed that SDK Manager completed but the next step failed at bare `adb wait-for-device` with `adb: command not found` (exit 127). CI now verifies `$ANDROID_HOME/platform-tools/adb`, exports `platform-tools` through `GITHUB_PATH`, and passes the explicit executable to a dedicated API 36 startup script. That script uses bounded waits for device registration and Android boot, and prints the device list and emulator log tail if startup fails. This corrects the tool lookup failure; a subsequent hosted run must still confirm that the emulator boots and the instrumentation suite runs.
 
@@ -8,7 +13,7 @@ The last hosted run successfully assembled `:app:assembleOfflineSideloadDebug` a
 
 # Timeline Agentique
 
-**Version:** `0.5.9-phase4c-api36-adb-path-fix`
+**Version:** `0.5.10-phase4c-api36-emulator-test-fix`
 
 ## 0.5.7 CI correction — app compile classpath and symbols
 
@@ -40,7 +45,7 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.9-phase4c-api36-adb-path-fix`
+**Current source version:** `0.5.10-phase4c-api36-emulator-test-fix`
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
 **Package ID:** provisional `app.timeline.islamic`

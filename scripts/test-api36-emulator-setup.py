@@ -64,6 +64,9 @@ class Api36EmulatorSetupTests(unittest.TestCase):
             env = os.environ.copy()
             env["ANDROID_HOME"] = str(sdk)
             env["AVDMANAGER"] = str(sdk / "cmdline-tools/latest/bin/avdmanager")
+            # CI exports a valid ADB path at job scope. Override it deliberately so
+            # this test exercises the missing-SDK-binary path instead of the host ADB.
+            env["ADB"] = str(sdk / "platform-tools" / "adb")
             result = subprocess.run(
                 ["bash", str(STARTER)],
                 env=env,
@@ -108,7 +111,10 @@ class Api36EmulatorSetupTests(unittest.TestCase):
                 "import os, sys, time\n"
                 "if sys.argv[1:] == ['-version']:\n print('Android emulator mock'); raise SystemExit(0)\n"
                 f"open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
-                "raise SystemExit(0)\n",
+                # A real emulator remains alive while adb registers the virtual
+                # device and Android reports sys.boot_completed=1. Keep the mock
+                # process alive for the same interval; early exit is a real fault.
+                "while True: time.sleep(0.1)\n",
                 encoding="utf-8",
             )
             emulator.chmod(0o755)
@@ -125,22 +131,36 @@ class Api36EmulatorSetupTests(unittest.TestCase):
             env["AVDMANAGER"] = str(avdmanager)
             env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
             env["TIMELINE_EMULATOR_LOG"] = str(root / "emulator.log")
-            result = subprocess.run(
-                ["bash", str(STARTER)],
-                env=env,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=False,
-                timeout=20,
-            )
-            if pid_file.exists():
-                try:
-                    os.kill(int(pid_file.read_text(encoding="utf-8")), signal.SIGTERM)
-                except (ProcessLookupError, ValueError):
-                    pass
-                time.sleep(0.05)
+            result = None
+            try:
+                result = subprocess.run(
+                    ["bash", str(STARTER)],
+                    env=env,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=False,
+                    timeout=20,
+                )
+            finally:
+                # The emulator is intentionally long-lived; always reap the
+                # detached mock even when the startup assertion or timeout fails.
+                if pid_file.exists():
+                    try:
+                        mock_pid = int(pid_file.read_text(encoding="utf-8"))
+                        os.kill(mock_pid, signal.SIGTERM)
+                    except (ProcessLookupError, ValueError):
+                        mock_pid = None
+                    if mock_pid is not None:
+                        deadline = time.monotonic() + 2.0
+                        while time.monotonic() < deadline:
+                            try:
+                                os.kill(mock_pid, 0)
+                            except ProcessLookupError:
+                                break
+                            time.sleep(0.05)
 
+        self.assertIsNotNone(result)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("API 36 emulator timeline-ci-api36 booted successfully", result.stdout)
 

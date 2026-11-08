@@ -1,3 +1,11 @@
+## 0.5.10-phase4c-api36-emulator-test-fix — 2026-11-08
+- Fixed the two failing API 36 emulator setup regression tests reported by GitHub Actions.
+- The missing-ADB test now overrides the job-level `ADB` variable with the intentionally absent path under its temporary SDK. Previously the inherited valid runner path caused the script to proceed to the next missing prerequisite, making the test assert the wrong diagnostic.
+- The successful-startup fake emulator now stays alive while mocked ADB reports device registration and boot completion. The test terminates the detached process in a `finally` cleanup path, including on subprocess timeout.
+- Kept production emulator early-exit detection, 180-second device-registration timeout, 600-second boot timeout, API 36 image, Pixel 6 AVD, KVM setup, and instrumentation tasks unchanged. No app runtime, Room schema, encryption, corpus trust, or retrieval behavior changed.
+- Bumped app versionCode to 14 and versionName to `0.5.10-phase4c-api36-emulator-test-fix`.
+- API 36 setup regression suite passes 6/6 locally. A GitHub-hosted run remains required to confirm real AVD boot and connected instrumentation tests.
+
 ## 0.5.9-phase4c-api36-adb-path-fix — 2026-11-08
 - Fixed the API 36 GitHub Actions startup failure (`adb: command not found`, exit 127). SDK Manager already installed `platform-tools`; the workflow had not guaranteed that `$ANDROID_HOME/platform-tools` was present on `PATH`.
 - CI now verifies the executable at `$ANDROID_HOME/platform-tools/adb`, exports the directory using `GITHUB_PATH`, and exports the absolute executable using `GITHUB_ENV`.

@@ -81,7 +81,10 @@ class BuiltInKotlinPolicyTests(unittest.TestCase):
     def test_app_uses_lazy_buildconfig_variant_api(self):
         app = (ROOT / "app/build.gradle.kts").read_text()
         self.assertIn("ApplicationAndroidComponentsExtension", app)
-        self.assertIn("variant.buildConfigFields.put(", app)
+        self.assertIn("val buildConfigFields = checkNotNull(variant.buildConfigFields)", app)
+        self.assertIn("buildConfigFields.put(", app)
+        self.assertNotIn("variant.buildConfigFields.put(", app)
+        self.assertIn("buildConfig = true", app)
         self.assertNotIn("buildConfigField(", app)
 
 if __name__ == "__main__":

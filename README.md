@@ -1,10 +1,16 @@
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Version:** `0.5.0-phase4c-agp9-built-in-kotlin`  
+**Version:** `0.5.1-phase4c-buildconfig-nullability-fix`  
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`  
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`  
 **Package ID:** provisional `app.timeline.islamic`  
 **Status:** incremental implementation source; not a production release.
+
+## 0.5.1 CI correction
+
+The first real AGP 9.3.1 Kotlin DSL configuration attempt found that the public `Variant.buildConfigFields` API is nullable. The app keeps `android.buildFeatures.buildConfig = true` and now checks the property with `checkNotNull` before registering the two publisher-root BuildConfig values. This fails explicitly if BuildConfig generation is unavailable instead of silently omitting trust configuration. The correction is covered by the built-in Kotlin/AGP verification scripts.
+
+The authoring environment still has no installed Gradle distribution or Android SDK, so the actual AGP/KGP/KSP build remains pending the next GitHub Actions run.
 
 ## What is in this source archive
 

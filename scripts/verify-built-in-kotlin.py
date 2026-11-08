@@ -70,10 +70,12 @@ if "dependencyLocking { lockAllConfigurations() }" in root:
     fail("Global lockAllConfigurations conflicts with AGP runtime/CycloneDX dynamic-version enforcement; use the tested selective lock policy")
 
 app = (ROOT / "app/build.gradle.kts").read_text(encoding="utf-8")
-if "ApplicationAndroidComponentsExtension" not in app or "variant.buildConfigFields.put(" not in app:
-    fail("App BuildConfig must be configured through lazy Android Components Variant API")
-if "buildConfigField(" in app:
-    fail("Deprecated eager buildConfigField() DSL remains in app module")
+if "ApplicationAndroidComponentsExtension" not in app or "val buildConfigFields = checkNotNull(variant.buildConfigFields)" not in app:
+    fail("App BuildConfig must null-check the optional public Variant API map")
+if "buildConfigFields.put(" not in app or "buildConfig = true" not in app:
+    fail("App BuildConfig fields must be populated through the enabled lazy Variant API")
+if "variant.buildConfigFields.put(" in app or "buildConfigField(" in app:
+    fail("Unsafe nullable or deprecated eager BuildConfig API usage remains in app module")
 
 if errors:
     print("Built-in Kotlin / modern AGP migration verification FAILED:", file=sys.stderr)

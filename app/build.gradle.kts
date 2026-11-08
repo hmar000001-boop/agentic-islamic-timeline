@@ -17,8 +17,8 @@ extensions.configure<ApplicationExtension>("android") {
         applicationId = "app.timeline.islamic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0-phase4c"
+        versionCode = 6
+        versionName = "0.5.1-phase4c-buildconfig-fix"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     flavorDimensions += "distribution"
@@ -40,11 +40,18 @@ extensions.configure<ApplicationExtension>("android") {
 // BuildConfig values use the lazy public Variant API; no deprecated eager buildConfigField calls.
 extensions.configure<ApplicationAndroidComponentsExtension>("androidComponents") {
     onVariants(selector().all()) { variant ->
-        variant.buildConfigFields.put(
+        // AGP's public Variant API exposes buildConfigFields as nullable because it may be
+        // unavailable when BuildConfig generation is disabled. This app explicitly enables
+        // android.buildFeatures.buildConfig above, so fail at configuration time if AGP does
+        // not expose the map rather than silently omitting the publisher trust fields.
+        val buildConfigFields = checkNotNull(variant.buildConfigFields) {
+            "BuildConfig fields are unavailable for ${variant.name}; keep android.buildFeatures.buildConfig enabled."
+        }
+        buildConfigFields.put(
             "CORPUS_PUBLISHER_ROOT_KEY_ID",
             BuildConfigField("String", buildConfigString(configuredRootId), "Pinned publisher root key identifier")
         )
-        variant.buildConfigFields.put(
+        buildConfigFields.put(
             "CORPUS_PUBLISHER_ROOT_KEY_B64",
             BuildConfigField("String", buildConfigString(configuredRootKey), "Pinned publisher root Ed25519 public key, base64")
         )

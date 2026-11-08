@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1-phase4c-buildconfig-nullability-fix — 2026-11-08
+- Fixed the Kotlin DSL compilation failure reported by GitHub Actions at `app/build.gradle.kts`: AGP's public `Variant.buildConfigFields` is nullable. The app now uses `checkNotNull(variant.buildConfigFields)` with an actionable configuration error before adding publisher-root BuildConfig values.
+- Kept BuildConfig generation explicitly enabled and preserved both publisher-root values; no permissive fallback or silent omission was added.
+- Added regression assertions to `scripts/test-built-in-kotlin.py` and `scripts/verify-built-in-kotlin.py` for the nullable Variant API guard.
+- Bumped app `versionCode` to 6 and `versionName` to `0.5.1-phase4c-buildconfig-nullability-fix`.
+- Local static checks pass. The actual Gradle/KGP/KSP/Room build and Android tests remain unexecuted in this authoring environment; rerun GitHub Actions to reveal the next build-stage result.
+
 ## 0.5.0-phase4c-agp9-built-in-kotlin — 2026-11-08
 - Continued incrementally from the Phase 4B/0.4.3 source; preserved Timeline, Canvas, Phase 3 agent/authorization runtime, signed corpus packs, publisher trust and retrieval.
 - Completed the AGP 9 built-in Kotlin migration: removed the external `org.jetbrains.kotlin.android` plugin and both temporary AGP opt-out flags; all Android modules use typed public `ApplicationExtension`/`LibraryExtension` DSL; Compose compiler uses the dedicated `org.jetbrains.kotlin.plugin.compose` plugin.

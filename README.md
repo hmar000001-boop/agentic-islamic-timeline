@@ -1,10 +1,14 @@
+## 0.5.9 CI correction — API 36 emulator adb discovery
+
+The supplied hosted-runner log showed that SDK Manager completed but the next step failed at bare `adb wait-for-device` with `adb: command not found` (exit 127). CI now verifies `$ANDROID_HOME/platform-tools/adb`, exports `platform-tools` through `GITHUB_PATH`, and passes the explicit executable to a dedicated API 36 startup script. That script uses bounded waits for device registration and Android boot, and prints the device list and emulator log tail if startup fails. This corrects the tool lookup failure; a subsequent hosted run must still confirm that the emulator boots and the instrumentation suite runs.
+
 ## 0.5.8 CI correction — English resource lint completeness
 
 The last hosted run successfully assembled `:app:assembleOfflineSideloadDebug` and passed lint for `core:corpus`, `core:retrieval`, and `feature:corpus-management`. App lint then reported three `MissingTranslation` errors: `app_nav_timeline`, `app_nav_canvas`, and `app_nav_corpus` existed in default and Arabic resources but were absent from the app's explicit `values-en/strings.xml`. All three English entries are now present. The corpus-management feature also now has an explicit English resource file matching its default English set. CI runs translation parity tests and a verifier before Gradle, checking both locale key sets and format placeholders without disabling lint.
 
 # Timeline Agentique
 
-**Version:** `0.5.8-phase4c-english-resource-lint-fix`
+**Version:** `0.5.9-phase4c-api36-adb-path-fix`
 
 ## 0.5.7 CI correction — app compile classpath and symbols
 
@@ -36,7 +40,7 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.8-phase4c-english-resource-lint-fix`
+**Current source version:** `0.5.9-phase4c-api36-adb-path-fix`
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
 **Package ID:** provisional `app.timeline.islamic`
@@ -135,4 +139,4 @@ For initial dependency lock generation on a network-enabled host, run the CI wor
 - Project Library folder: `/Timeline_Agentique/`
 - Immutable ZIPs and SHA-256 files are versioned; do not overwrite earlier deliveries.
 - Every meaningful tranche has a new checkpoint under `docs/checkpoints/` and report under `docs/reports/`.
-- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-08_phase4c-app-compile-fix.md` for the next implementation.
+- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-08_phase4c-api36-adb-path-fix.md` for the next implementation.

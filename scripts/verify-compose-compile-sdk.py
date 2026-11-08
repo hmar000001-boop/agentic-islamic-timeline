@@ -44,7 +44,8 @@ if '"platforms;android-37"' in workflow:
     errors.append("CI must not request the non-existent platforms;android-37 package path")
 if "verify-android-sdk-platform.py" not in workflow:
     errors.append("CI must verify the installed API 37.0 platform before starting Gradle")
-if '"system-images;android-36;google_apis;x86_64"' not in workflow or "timeline-ci-api36" not in workflow:
+emulator_setup = (ROOT / "scripts/start-api36-emulator.sh").read_text(encoding="utf-8")
+if '"system-images;android-36;google_apis;x86_64"' not in workflow or "timeline-ci-api36" not in emulator_setup:
     errors.append("CI should retain the API 36 emulator used for runtime compatibility tests")
 
 if errors:

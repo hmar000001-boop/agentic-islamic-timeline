@@ -36,7 +36,19 @@ jobs:
         run: |
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "platforms;android-37.0" "build-tools;36.0.0" "emulator" "system-images;android-36;google_apis;x86_64"
+          # GitHub-hosted runners do not guarantee platform-tools is on PATH.
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          if [ ! -x "$ADB" ]; then
+            echo "sdkmanager completed but adb is missing: $ADB" >&2
+            ls -la "$ANDROID_HOME/platform-tools" >&2 || true
+            exit 1
+          fi
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "ADB=$ADB" >> "$GITHUB_ENV"
+          "$ADB" version
           python3 scripts/verify-android-sdk-platform.py
+      - name: Test API 36 emulator tool discovery and startup contract
+        run: python3 scripts/test-api36-emulator-setup.py
       - name: Verify complete English and Arabic string resources
         run: |
           python3 scripts/test-string-translations.py
@@ -80,21 +92,7 @@ jobs:
           fi
       - name: Start API 36 emulator
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          echo no | "$AVDMANAGER" create avd --force --name timeline-ci-api36 --package "system-images;android-36;google_apis;x86_64" --device pixel_6
-          nohup "$ANDROID_HOME/emulator/emulator" -avd timeline-ci-api36 -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -camera-back none > /tmp/timeline-emulator.log 2>&1 &
-          adb wait-for-device
-          for i in $(seq 1 60); do
-            BOOTED="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
-            [ "$BOOTED" = "1" ] && break
-            sleep 5
-          done
-          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
-          adb shell settings put global window_animation_scale 0
-          adb shell settings put global transition_animation_scale 0
-          adb shell settings put global animator_duration_scale 0
+          bash scripts/start-api36-emulator.sh
       - name: Instrumented Android tests
         run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:connectedOfflineSideloadDebugAndroidTest :core:persistence:connectedDebugAndroidTest :core:corpus:connectedDebugAndroidTest :core:retrieval:connectedDebugAndroidTest
       - name: Dependency resolution report

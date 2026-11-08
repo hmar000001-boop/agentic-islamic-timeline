@@ -1,3 +1,12 @@
+## 0.5.9-phase4c-api36-adb-path-fix — 2026-11-08
+- Fixed the API 36 GitHub Actions startup failure (`adb: command not found`, exit 127). SDK Manager already installed `platform-tools`; the workflow had not guaranteed that `$ANDROID_HOME/platform-tools` was present on `PATH`.
+- CI now verifies the executable at `$ANDROID_HOME/platform-tools/adb`, exports the directory using `GITHUB_PATH`, and exports the absolute executable using `GITHUB_ENV`.
+- Moved AVD startup into `scripts/start-api36-emulator.sh`; the script uses explicit SDK paths for `adb` and `emulator`, checks required executables before creating the AVD, starts the adb server, and uses bounded waits for device registration (180 seconds) and Android boot completion (600 seconds).
+- On emulator failure, CI prints `adb devices -l`, process diagnostics and the last 200 lines of `/tmp/timeline-emulator.log` to distinguish a tooling-path issue from an actual emulator/KVM/boot failure.
+- Added regression tests that verify the workflow's SDK install/PATH contract, prohibit bare `adb` use in startup, and confirm missing `platform-tools/adb` fails early with an actionable message.
+- Bumped app versionCode to 13 and versionName to `0.5.9-phase4c-api36-adb-path-fix`. No app runtime logic, Compose UI, Room schema, encryption policy, corpus trust, retrieval behavior, compileSdk 37.0, targetSdk 36, or emulator API level changed.
+- Static regression tests and shell syntax checks can be run locally; a hosted GitHub Actions run remains necessary to verify actual API 36 emulator boot and connected Android instrumentation tests.
+
 ## 0.5.8-phase4c-english-resource-lint-fix — 2026-11-08
 - Fixed the three blocking `MissingTranslation` lint errors reported by the hosted `:app:lintOfflineSideloadDebug` task. The app's explicit `values-en/strings.xml` was missing `app_nav_timeline`, `app_nav_canvas`, and `app_nav_corpus`; added the existing English labels `Timeline`, `Canvas`, and `Knowledge`.
 - Added a complete explicit `values-en/strings.xml` for `feature:corpus-management`, matching its existing default English resource set and Arabic translation rather than relying on fallback for this new feature.

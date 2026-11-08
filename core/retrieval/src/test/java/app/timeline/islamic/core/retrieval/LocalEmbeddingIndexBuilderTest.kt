@@ -20,7 +20,7 @@ class LocalEmbeddingIndexBuilderTest {
 
     @Test fun completedBuildActivatesOnlyAfterAllBatchesAreWritten() = runBlocking {
         val fixtureStore = FixtureStore()
-        val file = File.createTempFile("corpus-test", ".sqlite")
+        val file = createFixtureIndexFile()
         try {
             val source = FixtureSource(listOf(
                 EmbeddingPassageInput(1, "1".repeat(64), "Arabic passage"),
@@ -37,17 +37,37 @@ class LocalEmbeddingIndexBuilderTest {
 
     @Test fun modelFailureAbortsStagingAndNeverActivates() = runBlocking {
         val fixtureStore = FixtureStore()
-        val file = File.createTempFile("corpus-test", ".sqlite")
+        val file = createFixtureIndexFile()
         try {
             val source = FixtureSource(listOf(EmbeddingPassageInput(1, "1".repeat(64), "bad output")))
             val model = object : LocalTextEmbeddingModel {
                 override val descriptor = this@LocalEmbeddingIndexBuilderTest.descriptor
                 override suspend fun embedBatch(texts: List<String>) = listOf(FloatArray(8))
             }
-            runCatching { LocalEmbeddingIndexBuilder(source, fixtureStore).build(pack, file, model) }
+            val failure = runCatching { LocalEmbeddingIndexBuilder(source, fixtureStore).build(pack, file, model) }
+            assertTrue("Wrong-dimension model output must fail the build", failure.isFailure)
+            assertEquals("Embedding model returned the wrong dimension", failure.exceptionOrNull()?.message)
+            assertEquals(1, fixtureStore.beginCount)
             assertEquals(1, fixtureStore.abortCount)
             assertTrue(!fixtureStore.activated)
         } finally { file.delete() }
+    }
+
+    @Test fun emptyIndexFileIsRejectedBeforeCreatingAStagingGeneration() = runBlocking {
+        val fixtureStore = FixtureStore()
+        val emptyFile = File.createTempFile("empty-corpus-test", ".sqlite")
+        try {
+            val failure = runCatching {
+                LocalEmbeddingIndexBuilder(FixtureSource(emptyList()), fixtureStore).build(
+                    pack, emptyFile, fixtureModel { FloatArray(16) { 0.5f } }
+                )
+            }
+            assertTrue("An empty corpus database must be rejected", failure.isFailure)
+            assertEquals("Corpus index file is missing or empty", failure.exceptionOrNull()?.message)
+            assertEquals(0, fixtureStore.beginCount)
+            assertEquals(0, fixtureStore.abortCount)
+            assertTrue(!fixtureStore.activated)
+        } finally { emptyFile.delete() }
     }
 
     @Test fun builderCannotExceedThePerGenerationRoomBudget() {
@@ -58,16 +78,24 @@ class LocalEmbeddingIndexBuilderTest {
 
     @Test fun oversizedPassageBatchIsRejectedAndAborted() = runBlocking {
         val fixtureStore = FixtureStore()
-        val file = File.createTempFile("corpus-test", ".sqlite")
+        val file = createFixtureIndexFile()
         try {
             val source = EmbeddingPassageSource { _, _, after, limit ->
                 if (after == 0L) (1L..(limit + 1)).map { EmbeddingPassageInput(it, it.toString().padStart(64, '0'), "text") } else emptyList()
             }
             val model = fixtureModel { FloatArray(16) { 1f } }
-            runCatching { LocalEmbeddingIndexBuilder(source, fixtureStore).build(pack, file, model) }
+            val failure = runCatching { LocalEmbeddingIndexBuilder(source, fixtureStore).build(pack, file, model) }
+            assertTrue("A source that exceeds the requested batch must fail", failure.isFailure)
+            assertEquals("Passage source exceeded requested batch size", failure.exceptionOrNull()?.message)
+            assertEquals(1, fixtureStore.beginCount)
             assertEquals(1, fixtureStore.abortCount)
             assertTrue(!fixtureStore.activated)
         } finally { file.delete() }
+    }
+
+    /** FixtureSource is deliberately in-memory; the production source opens/validates SQLite. */
+    private fun createFixtureIndexFile(): File = File.createTempFile("corpus-test", ".sqlite").apply {
+        writeText("fixture database placeholder consumed only by FixtureSource")
     }
 
     private fun fixtureModel(factory: (String) -> FloatArray) = object : LocalTextEmbeddingModel {
@@ -84,7 +112,11 @@ class LocalEmbeddingIndexBuilderTest {
         val staged = mutableMapOf<String, QuantizedEmbeddingVector>()
         var activated = false
         var abortCount = 0
-        override suspend fun beginGeneration(pack: InstalledCorpusPackRecord, model: LocalEmbeddingModelDescriptor, maximumTotalEncodedBytes: Long) = "generation"
+        var beginCount = 0
+        override suspend fun beginGeneration(pack: InstalledCorpusPackRecord, model: LocalEmbeddingModelDescriptor, maximumTotalEncodedBytes: Long): String {
+            beginCount++
+            return "generation"
+        }
         override suspend fun appendVectors(generationId: String, vectors: Map<String, QuantizedEmbeddingVector>): Long {
             staged.putAll(vectors); return staged.values.sumOf { it.dimension.toLong() }
         }

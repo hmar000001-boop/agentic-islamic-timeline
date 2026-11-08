@@ -33,7 +33,9 @@ class LocalEmbeddingIndexBuilder(
         model: LocalTextEmbeddingModel
     ): Result {
         require(pack.status == InstalledCorpusPackRecord.STATUS_INSTALLED)
-        require(indexFile.isFile && indexFile.length() > 0L)
+        require(indexFile.isFile && indexFile.length() > 0L) {
+            "Corpus index file is missing or empty"
+        }
         val descriptor = model.descriptor
         val generationId = store.beginGeneration(pack, descriptor, maximumEncodedBytes)
         var vectors = 0L

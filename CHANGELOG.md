@@ -1,3 +1,12 @@
+## 0.5.5-phase4c-embedding-index-test-fixture-fix — 2026-11-08
+- Fixed the three real GitHub Actions failures in `:core:retrieval:testDebugUnitTest` reported after API 37.0 installation and AGP/Kotlin configuration succeeded.
+- Root cause: the new `LocalEmbeddingIndexBuilder` correctly rejects missing or zero-byte SQLite index files before opening a staging generation, but three unit tests supplied `File.createTempFile(...)` files without writing any bytes. The completed-build test therefore failed before the builder ran; failure/oversized-batch tests saw `abortCount == 0` because staging had never begun.
+- Updated the tests to use an explicit non-empty fixture placeholder consumed only by the in-memory `FixtureSource`. The production `EmbeddingPassageSource` remains responsible for opening/validating the real installed SQLite database.
+- Strengthened failure tests to assert the actual exception and expected message for wrong embedding dimensions and oversized source batches, plus verify begin/abort/activation ordering.
+- Added `emptyIndexFileIsRejectedBeforeCreatingAStagingGeneration` to preserve the production precondition and prove an empty database is rejected before store mutation.
+- Added an actionable error message for missing/empty corpus index files. No relaxation of production validation, embedding behavior, SQLCipher storage, model policy, or retrieval was made.
+- CI supplied evidence that all app/core/feature production Kotlin compilation passed through the earlier tasks and KSP began; only the three `LocalEmbeddingIndexBuilderTest` cases failed. This correction specifically addresses those failures. Rerun the full hosted workflow to verify remaining tasks.
+
 ## 0.5.4-phase4c-sdk-metadata-validation-fix — 2026-11-08
 - Fixed the CI pre-Gradle Android SDK validator to match the real Platform 37.0 `source.properties` format: `AndroidVersion.ApiLevel=37.0` with `AndroidVersion.ExtensionLevel=22`, rather than assuming an integer API level plus a separate minor-level key.
 - Normalizes dotted and split API representations to a strict `(major, minor)` tuple; accepts only API 37.0, rejects API 37.1, wrong major levels, malformed values, conflicting dotted/separate minor values, missing/empty `android.jar`, missing package metadata, and SDK platform symlink escapes.

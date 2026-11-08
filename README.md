@@ -1,6 +1,6 @@
 # Timeline agentique — Android source foundation (Phases 1–4B)
 
-**Version:** `0.4.1-phase4b-publisher-trust-lifecycle`  
+**Version:** `0.4.2-phase4b-gradle-bootstrap-permission-fix`  
 **Architecture:** `Cahier_architecture_Timeline_agentique_v1.2.md`  
 **Readiness:** `Rapport_final_readiness_demarrage_Timeline_agentique.md`  
 **Package ID:** provisional `app.timeline.islamic`  
@@ -41,7 +41,7 @@
 
 ## Honest verification status
 
-This workspace has JDK 21 but **no Android SDK and no installed Gradle**. Outbound Maven/Gradle dependency resolution is unavailable from the authoring container. Consequently, the Android Gradle build and instrumentation suite have **not** been executed in this environment. The archive includes a Gradle 9.5.0 bootstrap script that retrieves the official distribution and verifies it against the SHA-256 value published by `services.gradle.org`; this is not the official Gradle Wrapper JAR. Run the first build on a machine with JDK 17+, Android SDK Platform 36, and network access.
+This workspace has JDK 21 but **no Android SDK and no installed Gradle**. Outbound Maven/Gradle dependency resolution is unavailable from the authoring container. Consequently, the Android Gradle build and instrumentation suite have **not** been executed in this environment. The archive includes a Gradle 9.5.0 bootstrap script that retrieves the official distribution and verifies it against the pinned SHA-256 value; this is not the official Gradle Wrapper JAR. The bootstrap restores Unix permission bits from the verified ZIP and explicitly makes `bin/gradle` executable, including when repairing a previously extracted cache. A CI regression test reproduces the non-executable-cache case. Run the first build on a machine with JDK 17+, Android SDK Platform 36, and network access.
 
 Static repository checks, file inventory, manifest permission checks, script syntax checks, ZIP integrity, and SHA-256 are run before packaging. These checks do not substitute for a Gradle compile or a real-device SQLCipher/Keystore test.
 

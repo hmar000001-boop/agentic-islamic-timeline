@@ -54,3 +54,12 @@ Continue from the complete Phase 4A `0.4.0` project plus the Phase 4B incrementa
 4. Implement versioned local embedding generation/index contracts and benchmark candidate models/runtime on supported Android hardware. Dense retrieval must remain optional and must never bypass licensing/review/madhhab eligibility or source-citation validation.
 
 Continue from the Phase 4B source and this checkpoint.
+
+## 2026-11-08 Gradle bootstrap permission hotfix (0.4.2)
+
+- Reported GitHub Actions failure at `./gradlew --version`: downloaded Gradle 9.5.0 `bin/gradle` existed but execution failed with `Permission denied` / exit 126.
+- Root cause: Python `zipfile.extractall()` did not restore the Unix executable bit; the custom wrapper then directly executed a mode-0644 launcher.
+- Fix in `gradlew`: restore ZIP POSIX file modes from `external_attr`; explicitly chmod the launcher to 0755 after extraction; repair an existing non-executable cached launcher before checking `-x`; reject extraction paths that escape the cache root.
+- Added `scripts/test-gradle-bootstrap.py` with a mode-0644 cached fake launcher to reproduce and prevent regression. CI runs this test before `./gradlew --version`.
+- Local verification: shell syntax, Python compile, regression test, Phase 4 schema guard, secret scan and workflow YAML check all passed.
+- No Android Gradle build or actual Gradle launch was performed locally. Next action: rerun GitHub Actions and diagnose any later, independent Gradle/dependency/AGP/KSP/Room failures from their logs.

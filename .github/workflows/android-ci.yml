@@ -40,6 +40,8 @@ jobs:
         run: python3 scripts/secret-scan.py
       - name: Validate Phase 4 Room publisher-keyring migration
         run: python3 scripts/check-phase4-schema.py
+      - name: Test Gradle bootstrap executable permissions
+        run: python3 scripts/test-gradle-bootstrap.py
       - name: Verify Gradle distribution
         run: ./gradlew --version
       - name: Unit tests

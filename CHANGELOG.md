@@ -1,3 +1,9 @@
+## 0.4.3-phase4b-agp-kotlin-dsl-compatibility-fix — 2026-11-08
+- Fixed the GitHub Actions Gradle configuration failure: AGP 9.3.1 enables the new DSL by default, which is incompatible with the project's applied `org.jetbrains.kotlin.android` plugin while the build also opts out of built-in Kotlin.
+- Kept the existing external Kotlin Gradle Plugin 2.4.21 / Compose compiler / KSP toolchain and set both required AGP 9 compatibility properties: `android.builtInKotlin=false` and `android.newDsl=false`. This is a temporary AGP 9 profile; AGP 10 removes these opt-outs and requires a coordinated built-in Kotlin and KSP migration.
+- Added `scripts/verify-agp-kotlin-mode.py` and wired it into CI before Gradle configuration. It verifies both properties, the pinned AGP major, the version-catalog Kotlin Android plugin, and consistent plugin application across Android modules.
+- No application/runtime/Room/corpus/retrieval/authorization code changed. Static configuration tests pass locally; a real Gradle build still requires the GitHub runner because the authoring container has no installed Gradle or Android SDK.
+
 # Changelog
 
 ## 0.4.0-phase4-knowledge-foundation — 2026-11-08

@@ -60,7 +60,7 @@ Static repository checks, file inventory, manifest permission checks, script syn
 | AndroidX SQLite | 2.7.1 | Bundled SQLite driver for FTS5 corpus indexes; separate from the Room/SQLCipher user database |
 | DataStore | 1.2.1 | locale preference |
 
-AGP 9 built-in Kotlin is explicitly disabled in `gradle.properties` to allow the pinned standalone Kotlin Gradle Plugin 2.4.21 and Compose compiler plugin to be used consistently. This is a transitional compatibility choice, not an architectural dependency; migrate to AGP built-in Kotlin only after confirming the exact AGP/Kotlin/KSP/Compose toolchain in CI.
+AGP 9 built-in Kotlin and the new DSL are both explicitly opted out in `gradle.properties` because this project currently applies the standalone `org.jetbrains.kotlin.android` plugin across Android modules and applies KSP to the Room module. AGP 9's new DSL is incompatible with the standalone Kotlin Android plugin unless both `android.builtInKotlin=false` and `android.newDsl=false` are set. This is a temporary AGP 9 compatibility profile, not an architectural dependency. CI runs `scripts/verify-agp-kotlin-mode.py` to prevent the two flags from drifting apart and to reject AGP 10+ until a coordinated built-in Kotlin/KSP migration has been completed. Do not remove either flag independently.
 
 ## Build
 

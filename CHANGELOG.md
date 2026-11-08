@@ -1,3 +1,10 @@
+## 0.5.4-phase4c-sdk-metadata-validation-fix — 2026-11-08
+- Fixed the CI pre-Gradle Android SDK validator to match the real Platform 37.0 `source.properties` format: `AndroidVersion.ApiLevel=37.0` with `AndroidVersion.ExtensionLevel=22`, rather than assuming an integer API level plus a separate minor-level key.
+- Normalizes dotted and split API representations to a strict `(major, minor)` tuple; accepts only API 37.0, rejects API 37.1, wrong major levels, malformed values, conflicting dotted/separate minor values, missing/empty `android.jar`, missing package metadata, and SDK platform symlink escapes.
+- Updated SDK validator fixtures to reproduce the exact platform metadata observed in GitHub Actions and expanded coverage to 8 tests.
+- No SDK package request, compile SDK, target SDK, emulator, dependency, or Android application behavior changed. CI continues to install `platforms;android-37.0`, compile against API 37.0, and run API 36 runtime tests.
+- The actual `sdkmanager` installation succeeded in GitHub Actions; only the project validator failed. This correction addresses that validator mismatch. A new hosted CI run is required to verify subsequent Gradle/KSP and unit-test stages.
+
 ## 0.5.3-phase4c-android-sdk-37.0 — 2026-11-08
 - Fixed the GitHub Actions SDK Manager failure caused by requesting the nonexistent package path `platforms;android-37`; the published API 37 platform package is `platforms;android-37.0`.
 - Migrated all 15 Android modules from the integer-only compileSdk setter to AGP's typed minor-API DSL: `compileSdk { version = release(37) { minorApiLevel = 0 } }`. This encodes the exact platform identity and avoids an ad-hoc SDK directory symlink.

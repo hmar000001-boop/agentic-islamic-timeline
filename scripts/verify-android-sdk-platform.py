@@ -2,6 +2,7 @@
 """Fail early unless the exact Android SDK Platform 37.0 package is installed."""
 from pathlib import Path
 import os
+import re
 import sys
 
 
@@ -40,15 +41,36 @@ def validate_sdk_platform(sdk_root: Path) -> Path:
     if not source_properties.is_file():
         raise RuntimeError(f"Android SDK Platform 37.0 has no source.properties: {source_properties}")
     properties = _properties(source_properties)
-    if properties.get("AndroidVersion.ApiLevel") != "37":
+    # The actual SDK Platform 37.0 package reports AndroidVersion.ApiLevel=37.0
+    # (one dotted value), not ApiLevel=37 plus a separate MinorApiLevel=0.
+    # Accept the split representation as a compatibility form, but normalize
+    # both representations to the same (major, minor) tuple before comparison.
+    raw_api = properties.get("AndroidVersion.ApiLevel", "")
+    match = re.fullmatch(r"(?P<major>\d+)(?:\.(?P<minor>\d+))?", raw_api)
+    if match is None:
         raise RuntimeError(
-            "SDK package android-37.0 reports an unexpected AndroidVersion.ApiLevel: "
-            f"{properties.get('AndroidVersion.ApiLevel')!r}"
+            "SDK package android-37.0 has an invalid AndroidVersion.ApiLevel: "
+            f"{raw_api!r}; expected '37.0'"
         )
-    minor = properties.get("AndroidVersion.MinorApiLevel", "0")
-    if minor != "0":
+    major = int(match.group("major"))
+    dotted_minor = int(match.group("minor") or "0")
+    separate_minor_raw = properties.get("AndroidVersion.MinorApiLevel")
+    if separate_minor_raw is not None:
+        if not re.fullmatch(r"\d+", separate_minor_raw):
+            raise RuntimeError(
+                "SDK package android-37.0 has an invalid AndroidVersion.MinorApiLevel: "
+                f"{separate_minor_raw!r}"
+            )
+        separate_minor = int(separate_minor_raw)
+        if match.group("minor") is not None and separate_minor != dotted_minor:
+            raise RuntimeError(
+                "SDK package android-37.0 has conflicting dotted and separate minor API levels"
+            )
+        dotted_minor = separate_minor
+    if (major, dotted_minor) != (37, 0):
         raise RuntimeError(
-            f"SDK package android-37.0 reports minor API level {minor!r}; expected 0"
+            "SDK package android-37.0 reports an unexpected Android API version: "
+            f"{major}.{dotted_minor}; expected 37.0"
         )
     return resolved
 

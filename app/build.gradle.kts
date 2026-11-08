@@ -18,7 +18,7 @@ extensions.configure<ApplicationExtension>("android") {
         minSdk = 26
         targetSdk = 36
         versionCode = 8
-        versionName = "0.5.3-phase4c-compile-sdk37.0"
+        versionName = "0.5.4-phase4c-sdk-metadata-validation-fix"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     flavorDimensions += "distribution"

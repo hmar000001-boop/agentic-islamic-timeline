@@ -1,8 +1,12 @@
 # Timeline Agentique
 
-**Version:** `0.5.3-phase4c-compile-sdk37.0`  
+**Version:** `0.5.4-phase4c-sdk-metadata-validation-fix`  
 **Android:** minSdk 26 · compileSdk 37.0 · targetSdk 36  
 **Build:** AGP 9.3.1 · Gradle 9.5.0 · Kotlin 2.4.21 · KSP 2.3.13
+
+## 0.5.4 CI correction — parse the real Android SDK Platform 37.0 metadata
+
+The installed Platform 37.0 package reports `AndroidVersion.ApiLevel=37.0` (a dotted value) in `source.properties`; it does not report `AndroidVersion.ApiLevel=37` plus `AndroidVersion.MinorApiLevel=0`. The pre-Gradle verifier now parses and normalizes both representations, accepts exactly major 37/minor 0, rejects mismatched or conflicting values, and retains the `android.jar`, directory-boundary, and package-name checks. Eight regression tests include the exact metadata emitted by the runner.
 
 ## 0.5.3 CI correction — Android SDK Platform 37.0
 
@@ -18,7 +22,7 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.3-phase4c-compile-sdk37.0`  
+**Current source version:** `0.5.4-phase4c-sdk-metadata-validation-fix`  
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`  
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`  
 **Package ID:** provisional `app.timeline.islamic`  

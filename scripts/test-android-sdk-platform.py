@@ -22,8 +22,10 @@ class AndroidSdkPlatformTests(unittest.TestCase):
         (self.platform / "android.jar").write_bytes(b"test android platform jar")
         (self.platform / "source.properties").write_text(
             "Pkg.Desc=Android SDK Platform 37.0\n"
-            "AndroidVersion.ApiLevel=37\n"
-            "AndroidVersion.MinorApiLevel=0\n",
+            "AndroidVersion.ApiLevel=37.0\n"
+            "AndroidVersion.CodeName=\n"
+            "AndroidVersion.ExtensionLevel=22\n"
+            "AndroidVersion.IsBaseSdk=true\n",
             encoding="utf-8",
         )
 
@@ -45,14 +47,39 @@ class AndroidSdkPlatformTests(unittest.TestCase):
         (self.platform / "source.properties").write_text(
             "AndroidVersion.ApiLevel=36\nAndroidVersion.MinorApiLevel=0\n", encoding="utf-8"
         )
-        with self.assertRaisesRegex(RuntimeError, "ApiLevel"):
+        with self.assertRaisesRegex(RuntimeError, "API version|ApiLevel"):
             MODULE.validate_sdk_platform(self.sdk)
 
     def test_rejects_wrong_minor_api_level(self) -> None:
         (self.platform / "source.properties").write_text(
-            "AndroidVersion.ApiLevel=37\nAndroidVersion.MinorApiLevel=1\n", encoding="utf-8"
+            "AndroidVersion.ApiLevel=37.1\n", encoding="utf-8"
         )
-        with self.assertRaisesRegex(RuntimeError, "minor API level"):
+        with self.assertRaisesRegex(RuntimeError, "37.1"):
+            MODULE.validate_sdk_platform(self.sdk)
+
+    def test_rejects_malformed_api_level(self) -> None:
+        (self.platform / "source.properties").write_text(
+            "AndroidVersion.ApiLevel=37.preview\n", encoding="utf-8"
+        )
+        with self.assertRaisesRegex(RuntimeError, "invalid AndroidVersion.ApiLevel"):
+            MODULE.validate_sdk_platform(self.sdk)
+
+    def test_rejects_missing_source_properties(self) -> None:
+        (self.platform / "source.properties").unlink()
+        with self.assertRaisesRegex(RuntimeError, "source.properties"):
+            MODULE.validate_sdk_platform(self.sdk)
+
+    def test_accepts_split_api_level_representation(self) -> None:
+        (self.platform / "source.properties").write_text(
+            "AndroidVersion.ApiLevel=37\nAndroidVersion.MinorApiLevel=0\n", encoding="utf-8"
+        )
+        self.assertEqual(MODULE.validate_sdk_platform(self.sdk), self.platform.resolve())
+
+    def test_rejects_conflicting_minor_representations(self) -> None:
+        (self.platform / "source.properties").write_text(
+            "AndroidVersion.ApiLevel=37.0\nAndroidVersion.MinorApiLevel=1\n", encoding="utf-8"
+        )
+        with self.assertRaisesRegex(RuntimeError, "conflicting"):
             MODULE.validate_sdk_platform(self.sdk)
 
     def test_rejects_missing_android_jar(self) -> None:

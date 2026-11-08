@@ -1,3 +1,11 @@
+## 0.5.13-phase4c-api36-headless-qemu-preflight-fix — 2026-11-08
+- Corrected the API 36 emulator dependency preflight after the 0.5.12 log showed dozens of unresolved Qt/Android-emulator libraries. The previous check inspected `qemu-system-x86_64` (the GUI backend) even though CI starts the emulator with `-no-window`, which selects `qemu-system-x86_64-headless`.
+- The preflight now validates the exact headless QEMU backend and supplies the SDK-bundled Linux search paths used by the Android Emulator launcher: `emulator/lib64`, `gles_swiftshader`, `vulkan`, and `libstdc++`. This lets `ldd` resolve Android Emulator-owned objects such as `libc++`, `libabseil_dll`, and `libandroid-emu-*` while still detecting genuinely missing Ubuntu host libraries.
+- Added regression assertions for the headless binary selection, launcher-equivalent library search path, absence of GUI Qt paths from the headless preflight, missing host-library failure, and successful mocked ADB startup.
+- Kept the existing `libpulse0` runner package check as a defensive host-runtime dependency; no PulseAudio service or app audio capability is introduced. API 36 image, Pixel 6 AVD, `-no-window`, SwiftShader, KVM behavior, 180-second registration deadline and 600-second guest boot deadline remain unchanged.
+- Bumped app versionCode to 17 and versionName to `0.5.13-phase4c-api36-headless-qemu-preflight-fix`.
+- Local API 36 regression suite passes 9/9. Static checks, ZIP integrity, SHA-256 and exact patch reproduction pass. Real hosted QEMU launch, Android boot and instrumentation remain pending GitHub Actions confirmation.
+
 ## 0.5.12-phase4c-api36-libpulse-fix — 2026-11-08
 - Fixed the hosted API 36 emulator startup failure reported by QEMU: `qemu-system-x86_64` could not load `libpulse.so.0` and exited with code 127. The GitHub Actions job now installs Ubuntu's `libpulse0` runtime package (`--no-install-recommends`); this installs the PulseAudio client shared library only, not a PulseAudio server and not audio functionality in the application.
 - Added a preflight to `scripts/start-api36-emulator.sh` that inspects the exact x86_64 QEMU executable with `ldd` before creating the AVD or launching the emulator. Missing shared objects are listed explicitly and the script exits early with the package installation guidance; it does not suppress loader errors or silently proceed.

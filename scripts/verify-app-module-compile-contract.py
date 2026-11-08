@@ -41,8 +41,8 @@ checks = [
      "AppDatabase public RoomDatabase supertype is explicit"),
     ('implementation(project(":core:persistence"))' in app_gradle,
      "app consumes the persistence module through its declared project dependency"),
-    ("versionCode = 16" in app_gradle and 'versionName = "0.5.12-phase4c-api36-libpulse-fix"' in app_gradle,
-     "application version is bumped for the API 36 QEMU host-library fix"),
+    ("versionCode = 17" in app_gradle and 'versionName = "0.5.13-phase4c-api36-headless-qemu-preflight-fix"' in app_gradle,
+     "application version is bumped for the API 36 headless QEMU preflight correction"),
 ]
 
 failed = 0

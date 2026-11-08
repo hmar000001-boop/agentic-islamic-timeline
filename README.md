@@ -1,4 +1,8 @@
-## 0.5.12 CI correction — API 36 QEMU host library
+## 0.5.13 CI correction — select the actual headless QEMU backend
+
+The API 36 job launches the emulator with `-no-window`, which the Android Emulator launcher treats as headless mode. The launcher therefore selects `qemu-system-x86_64-headless`, not the GUI `qemu-system-x86_64` binary. The 0.5.12 preflight inspected the wrong binary and ran `ldd` without the SDK's bundled library search paths, so it reported SDK-owned Qt/Android-emulator libraries as missing. The preflight now checks the headless binary and mirrors the launcher's `lib64`, SwiftShader GLES, Vulkan and bundled `libstdc++` search directories. Genuine missing host dependencies still fail fast. The API 36 regression suite passes 9/9 locally; actual GitHub-hosted QEMU launch, API 36 guest boot and connected instrumentation still require Actions confirmation.
+
+## 0.5.12 CI correction — initial API 36 QEMU host library preflight
 
 The latest hosted emulator step reached the Android Emulator launcher, but QEMU could not load `libpulse.so.0` and exited with code 127 before an Android guest started. The Ubuntu runner now installs the `libpulse0` client runtime package; no PulseAudio server or app audio feature is installed. Before creating the AVD, the startup script checks the x86_64 QEMU binary with `ldd` and fails with the exact unresolved library names if host dependencies are missing. Tests cover the workflow package install, missing-library preflight, and successful mock startup. Real hosted API 36 boot and connected instrumentation still require Actions verification.
 
@@ -17,7 +21,7 @@ The last hosted run successfully assembled `:app:assembleOfflineSideloadDebug` a
 
 # Timeline Agentique
 
-**Version:** `0.5.12-phase4c-api36-libpulse-fix`
+**Version:** `0.5.13-phase4c-api36-headless-qemu-preflight-fix`
 
 ## 0.5.7 CI correction — app compile classpath and symbols
 
@@ -49,7 +53,7 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.12-phase4c-api36-libpulse-fix`
+**Current source version:** `0.5.13-phase4c-api36-headless-qemu-preflight-fix`
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
 **Package ID:** provisional `app.timeline.islamic`
@@ -148,4 +152,4 @@ For initial dependency lock generation on a network-enabled host, run the CI wor
 - Project Library folder: `/Timeline_Agentique/`
 - Immutable ZIPs and SHA-256 files are versioned; do not overwrite earlier deliveries.
 - Every meaningful tranche has a new checkpoint under `docs/checkpoints/` and report under `docs/reports/`.
-- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-08_phase4c-api36-adb-path-fix.md` for the next implementation.
+- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-08_phase4c-api36-headless-qemu-preflight-fix.md` for the next implementation.

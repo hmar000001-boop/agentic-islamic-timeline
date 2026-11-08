@@ -8,7 +8,13 @@ set -Eeuo pipefail
 SDK_ROOT="${ANDROID_HOME}"
 ADB="${ADB:-${SDK_ROOT}/platform-tools/adb}"
 EMULATOR="${SDK_ROOT}/emulator/emulator"
-QEMU="${SDK_ROOT}/emulator/qemu/linux-x86_64/qemu-system-x86_64"
+# -no-window selects the emulator's headless QEMU backend. The GUI binary has
+# additional Qt dependencies and is not the executable this job will launch.
+QEMU="${SDK_ROOT}/emulator/qemu/linux-x86_64/qemu-system-x86_64-headless"
+EMULATOR_LIB_DIR="${SDK_ROOT}/emulator/lib64"
+QEMU_GLES_LIB_DIR="${EMULATOR_LIB_DIR}/gles_swiftshader"
+QEMU_VULKAN_LIB_DIR="${EMULATOR_LIB_DIR}/vulkan"
+QEMU_STDLIB_LIB_DIR="${EMULATOR_LIB_DIR}/libstdc++"
 AVD_NAME="timeline-ci-api36"
 LOG_FILE="${TIMELINE_EMULATOR_LOG:-/tmp/timeline-emulator.log}"
 
@@ -44,28 +50,44 @@ if [[ ! -x "$AVDMANAGER" ]]; then
   exit 1
 fi
 if [[ ! -x "$QEMU" ]]; then
-  echo "Android emulator QEMU executable is missing or not executable: $QEMU" >&2
+  echo "Android emulator headless QEMU executable is missing or not executable: $QEMU" >&2
+  exit 1
+fi
+if [[ ! -d "$EMULATOR_LIB_DIR" ]]; then
+  echo "Android emulator SDK bundled library directory is missing: $EMULATOR_LIB_DIR" >&2
+  echo "Reinstall the Android SDK 'emulator' package with sdkmanager." >&2
   exit 1
 fi
 if ! command -v ldd >/dev/null 2>&1; then
   echo "Cannot validate Android emulator host libraries: ldd is unavailable on PATH." >&2
   exit 1
 fi
-if ! QEMU_DEPENDENCIES="$(ldd "$QEMU" 2>&1)"; then
-  echo "Unable to inspect Android emulator QEMU shared-library dependencies: $QEMU" >&2
+# Mirror the Linux Android Emulator launcher for this exact invocation:
+# -no-window selects headless QEMU, which loads lib64, the SwiftShader GLES
+# backend, Vulkan ICD libraries, and the bundled libstdc++ directory. It does
+# not load the GUI-only lib64/qt tree. AOSP adds these paths before re-execing
+# QEMU; ldd must receive the same search path or it falsely reports SDK-owned
+# libraries (libc++, libandroid-emu-*, libabseil, etc.) as missing.
+QEMU_LIBRARY_PATH="${EMULATOR_LIB_DIR}:${QEMU_GLES_LIB_DIR}:${QEMU_VULKAN_LIB_DIR}:${QEMU_STDLIB_LIB_DIR}"
+if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+  QEMU_LIBRARY_PATH="${QEMU_LIBRARY_PATH}:${LD_LIBRARY_PATH}"
+fi
+if ! QEMU_DEPENDENCIES="$(LD_LIBRARY_PATH="$QEMU_LIBRARY_PATH" ldd "$QEMU" 2>&1)"; then
+  echo "Unable to inspect Android emulator headless QEMU shared-library dependencies: $QEMU" >&2
   printf '%s\n' "$QEMU_DEPENDENCIES" >&2
   exit 1
 fi
 MISSING_QEMU_LIBRARIES="$(printf '%s\n' "$QEMU_DEPENDENCIES" | awk '/not found/ { print $1 }' | sort -u)"
 if [[ -n "$MISSING_QEMU_LIBRARIES" ]]; then
-  echo "Android emulator QEMU is missing required Linux host shared libraries:" >&2
+  echo "Android emulator headless QEMU has unresolved shared-library dependencies:" >&2
   printf '  %s\n' "$MISSING_QEMU_LIBRARIES" >&2
-  echo "On Ubuntu runners, install the runtime package: sudo apt-get install --yes --no-install-recommends libpulse0" >&2
-  echo "Install the package providing every listed library, then rerun the emulator startup step." >&2
+  echo "QEMU dependency search path: $QEMU_LIBRARY_PATH" >&2
+  echo "If an unresolved library belongs to the Android SDK, reinstall the SDK 'emulator' package." >&2
+  echo "If it is a host library, install the Ubuntu package that provides that exact shared object." >&2
   exit 1
 fi
 
-echo "Verified Android emulator QEMU shared-library dependencies."
+echo "Verified Android emulator headless QEMU shared-library dependencies."
 "$ADB" version
 "$EMULATOR" -version
 

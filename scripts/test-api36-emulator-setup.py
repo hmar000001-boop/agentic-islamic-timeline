@@ -53,8 +53,8 @@ class Api36EmulatorSetupTests(unittest.TestCase):
     def test_startup_script_uses_sdk_absolute_adb_and_emulator_paths(self) -> None:
         self.assertIn('ADB="${ADB:-${SDK_ROOT}/platform-tools/adb}"', self.starter)
         self.assertIn('EMULATOR="${SDK_ROOT}/emulator/emulator"', self.starter)
-        self.assertIn('QEMU="${SDK_ROOT}/emulator/qemu/linux-x86_64/qemu-system-x86_64"', self.starter)
-        self.assertIn('QEMU_DEPENDENCIES="$(ldd "$QEMU" 2>&1)"', self.starter)
+        self.assertIn('QEMU="${SDK_ROOT}/emulator/qemu/linux-x86_64/qemu-system-x86_64-headless"', self.starter)
+        self.assertIn('QEMU_DEPENDENCIES="$(LD_LIBRARY_PATH="$QEMU_LIBRARY_PATH" ldd "$QEMU" 2>&1)"', self.starter)
         self.assertIn("MISSING_QEMU_LIBRARIES", self.starter)
         self.assertIn('if [[ ! -x "$ADB" ]]', self.starter)
         self.assertIn('"$ADB" start-server', self.starter)
@@ -62,6 +62,21 @@ class Api36EmulatorSetupTests(unittest.TestCase):
         self.assertIn('"$ADB" shell getprop sys.boot_completed', self.starter)
         self.assertIn('"$ADB" shell settings put global', self.starter)
         self.assertNotRegex(self.starter, r"(?m)^\s*adb\s+")
+
+    def test_headless_preflight_mirrors_android_launcher_library_paths(self) -> None:
+        self.assertIn('qemu-system-x86_64-headless', self.starter)
+        self.assertIn('EMULATOR_LIB_DIR="${SDK_ROOT}/emulator/lib64"', self.starter)
+        self.assertIn('QEMU_GLES_LIB_DIR="${EMULATOR_LIB_DIR}/gles_swiftshader"', self.starter)
+        self.assertIn('QEMU_VULKAN_LIB_DIR="${EMULATOR_LIB_DIR}/vulkan"', self.starter)
+        self.assertIn('QEMU_STDLIB_LIB_DIR="${EMULATOR_LIB_DIR}/libstdc++"', self.starter)
+        self.assertIn('${EMULATOR_LIB_DIR}:${QEMU_GLES_LIB_DIR}:${QEMU_VULKAN_LIB_DIR}:${QEMU_STDLIB_LIB_DIR}', self.starter)
+        self.assertIn('LD_LIBRARY_PATH="$QEMU_LIBRARY_PATH" ldd "$QEMU"', self.starter)
+        library_path_assignment = next(
+            line for line in self.starter.splitlines() if line.startswith('QEMU_LIBRARY_PATH=')
+        )
+        self.assertNotIn('qt', library_path_assignment)
+        self.assertIn('"$EMULATOR" -avd "$AVD_NAME"', self.starter)
+        self.assertIn('-no-window -no-audio -no-boot-anim', self.starter)
 
     def test_startup_script_reports_emulator_logs_on_boot_failure(self) -> None:
         self.assertIn("within 180 seconds", self.starter)
@@ -98,14 +113,22 @@ class Api36EmulatorSetupTests(unittest.TestCase):
             adb_dir = sdk / "platform-tools"
             emulator_dir = sdk / "emulator"
             qemu_dir = emulator_dir / "qemu/linux-x86_64"
+            emulator_lib_dir = emulator_dir / "lib64"
             fake_bin = root / "bin"
-            for directory in (adb_dir, qemu_dir, fake_bin):
+            for directory in (
+                adb_dir,
+                qemu_dir,
+                emulator_lib_dir / "gles_swiftshader",
+                emulator_lib_dir / "vulkan",
+                emulator_lib_dir / "libstdc++",
+                fake_bin,
+            ):
                 directory.mkdir(parents=True, exist_ok=True)
 
             adb = adb_dir / "adb"
             adb.write_text("#!/bin/sh\necho adb-must-not-be-called >&2\nexit 99\n", encoding="utf-8")
             adb.chmod(0o755)
-            qemu = qemu_dir / "qemu-system-x86_64"
+            qemu = qemu_dir / "qemu-system-x86_64-headless"
             qemu.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             qemu.chmod(0o755)
             emulator_marker = root / "emulator-was-launched"
@@ -121,7 +144,12 @@ class Api36EmulatorSetupTests(unittest.TestCase):
             avdmanager.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             avdmanager.chmod(0o755)
             ldd = fake_bin / "ldd"
-            ldd.write_text("#!/bin/sh\necho 'libpulse.so.0 => not found'\nexit 0\n", encoding="utf-8")
+            ldd.write_text(
+                "#!/bin/sh\n"
+                f"printf '%s\\n' \"$LD_LIBRARY_PATH\" > {str(root / 'ldd-library-path.txt')!r}\n"
+                "echo 'libpulse.so.0 => not found'\nexit 0\n",
+                encoding="utf-8",
+            )
             ldd.chmod(0o755)
 
             env = os.environ.copy()
@@ -141,7 +169,7 @@ class Api36EmulatorSetupTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("libpulse.so.0", result.stderr)
-        self.assertIn("apt-get install", result.stderr)
+        self.assertIn("QEMU dependency search path:", result.stderr)
         self.assertFalse(emulator_marker.exists(), "emulator must not launch when QEMU dependencies are missing")
 
     def test_startup_script_completes_with_mocked_sdk_tools(self) -> None:
@@ -151,8 +179,16 @@ class Api36EmulatorSetupTests(unittest.TestCase):
             platform_tools = sdk / "platform-tools"
             emulator_dir = sdk / "emulator"
             qemu_dir = emulator_dir / "qemu/linux-x86_64"
+            emulator_lib_dir = emulator_dir / "lib64"
             fake_bin = root / "bin"
-            for directory in (platform_tools, qemu_dir, fake_bin):
+            for directory in (
+                platform_tools,
+                qemu_dir,
+                emulator_lib_dir / "gles_swiftshader",
+                emulator_lib_dir / "vulkan",
+                emulator_lib_dir / "libstdc++",
+                fake_bin,
+            ):
                 directory.mkdir(parents=True, exist_ok=True)
 
             adb = platform_tools / "adb"
@@ -187,12 +223,17 @@ class Api36EmulatorSetupTests(unittest.TestCase):
                 encoding="utf-8",
             )
             emulator.chmod(0o755)
-            qemu = qemu_dir / "qemu-system-x86_64"
+            qemu = qemu_dir / "qemu-system-x86_64-headless"
             qemu.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             qemu.chmod(0o755)
             ldd = fake_bin / "ldd"
+            ldd_observations = root / "mock-ldd-observations.txt"
             ldd.write_text(
-                "#!/bin/sh\necho 'libpulse.so.0 => /usr/lib/x86_64-linux-gnu/libpulse.so.0 (0x0)'\nexit 0\n",
+                "#!/bin/sh\n"
+                f"printf '%s\\n' \"$1\" \"$LD_LIBRARY_PATH\" > {str(ldd_observations)!r}\n"
+                "echo 'libc++.so => /tmp/mock-sdk/emulator/lib64/libc++.so (0x0)'\n"
+                "echo 'libandroid-emu-shared.so => /tmp/mock-sdk/emulator/lib64/libandroid-emu-shared.so (0x0)'\n"
+                "exit 0\n",
                 encoding="utf-8",
             )
             ldd.chmod(0o755)
@@ -241,6 +282,19 @@ class Api36EmulatorSetupTests(unittest.TestCase):
                                 break
                             time.sleep(0.05)
             adb_calls = set(adb_calls_file.read_text(encoding="utf-8").splitlines())
+            ldd_args = ldd_observations.read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(len(ldd_args), 2, ldd_args)
+        self.assertEqual(ldd_args[0], str(qemu))
+        expected_library_dirs = [
+            str(emulator_lib_dir),
+            str(emulator_lib_dir / "gles_swiftshader"),
+            str(emulator_lib_dir / "vulkan"),
+            str(emulator_lib_dir / "libstdc++"),
+        ]
+        for directory in expected_library_dirs:
+            self.assertIn(directory, ldd_args[1].split(os.pathsep))
+        self.assertNotIn(str(emulator_lib_dir / "qt"), ldd_args[1])
 
         self.assertIsNotNone(result)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

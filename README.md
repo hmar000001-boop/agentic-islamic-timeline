@@ -1,3 +1,7 @@
+## 0.5.11 CI correction — API 36 emulator test ADB isolation
+
+The latest Actions run timed out in the mocked successful-startup test. The workflow exports `ADB` at job scope, and the test copied that environment while replacing only `ANDROID_HOME`; therefore the startup script called the real runner ADB rather than the fake SDK ADB. Since the fake emulator cannot register with the real ADB server, the script correctly remained in its bounded device-registration loop and the test's 20-second timeout expired. The test now explicitly overrides `ADB` with its temporary mock, records mock invocations, and asserts that all expected commands use the mock. The production startup script and its 180/600-second deadlines are unchanged. The test suite passes 6/6 with a pre-existing inherited `ADB` variable; real hosted emulator boot and instrumentation still require Actions verification.
+
 ## 0.5.10 CI correction — API 36 emulator test fixtures
 
 The next GitHub Actions run exposed two failures in the emulator setup regression tests, not in the emulator startup path itself. The missing-ADB test inherited the runner's valid job-level `ADB` override, so it reached a later missing-emulator check. It now explicitly points to the missing `platform-tools/adb` path in its temporary SDK. The successful-startup fake emulator had exited immediately; it now remains alive while ADB reports a booted device and is terminated in a `finally` cleanup path. Production early-exit detection and boot deadlines remain intact. The regression suite passes 6/6 locally; a hosted run must still verify real API 36 boot and instrumentation.
@@ -13,7 +17,7 @@ The last hosted run successfully assembled `:app:assembleOfflineSideloadDebug` a
 
 # Timeline Agentique
 
-**Version:** `0.5.10-phase4c-api36-emulator-test-fix`
+**Version:** `0.5.11-phase4c-api36-adb-test-isolation-fix`
 
 ## 0.5.7 CI correction — app compile classpath and symbols
 
@@ -45,7 +49,7 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.10-phase4c-api36-emulator-test-fix`
+**Current source version:** `0.5.11-phase4c-api36-adb-test-isolation-fix`
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
 **Package ID:** provisional `app.timeline.islamic`

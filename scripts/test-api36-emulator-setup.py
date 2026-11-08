@@ -90,9 +90,12 @@ class Api36EmulatorSetupTests(unittest.TestCase):
                 directory.mkdir(parents=True, exist_ok=True)
 
             adb = platform_tools / "adb"
+            adb_calls_file = root / "mock-adb-calls.log"
             adb.write_text(
                 "#!/usr/bin/env python3\n"
                 "import sys\n"
+                f"with open({str(adb_calls_file)!r}, 'a', encoding='utf-8') as calls: "
+                "calls.write(' '.join(sys.argv[1:]) + '\\n')\n"
                 "args = sys.argv[1:]\n"
                 "if args == ['version']:\n print('Android Debug Bridge mock')\n"
                 "elif args == ['get-state']:\n print('device')\n"
@@ -129,6 +132,9 @@ class Api36EmulatorSetupTests(unittest.TestCase):
             env = os.environ.copy()
             env["ANDROID_HOME"] = str(sdk)
             env["AVDMANAGER"] = str(avdmanager)
+            # The workflow exports a job-wide ADB pointing at the real SDK.
+            # Override it so the starter and this test use the same isolated SDK.
+            env["ADB"] = str(adb)
             env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
             env["TIMELINE_EMULATOR_LOG"] = str(root / "emulator.log")
             result = None
@@ -159,10 +165,24 @@ class Api36EmulatorSetupTests(unittest.TestCase):
                             except ProcessLookupError:
                                 break
                             time.sleep(0.05)
+            adb_calls = set(adb_calls_file.read_text(encoding="utf-8").splitlines())
 
         self.assertIsNotNone(result)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("API 36 emulator timeline-ci-api36 booted successfully", result.stdout)
+        self.assertTrue(
+            {
+                "version",
+                "start-server",
+                "get-state",
+                "shell getprop sys.boot_completed",
+                "shell settings put global window_animation_scale 0",
+                "shell settings put global transition_animation_scale 0",
+                "shell settings put global animator_duration_scale 0",
+                "devices -l",
+            }.issubset(adb_calls),
+            f"the isolated mock adb did not receive all expected commands: {sorted(adb_calls)}",
+        )
 
 
 if __name__ == "__main__":

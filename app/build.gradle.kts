@@ -17,8 +17,8 @@ extensions.configure<ApplicationExtension>("android") {
         applicationId = "app.timeline.islamic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.5.10-phase4c-api36-emulator-test-fix"
+        versionCode = 15
+        versionName = "0.5.11-phase4c-api36-adb-test-isolation-fix"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     flavorDimensions += "distribution"

@@ -41,8 +41,8 @@ checks = [
      "AppDatabase public RoomDatabase supertype is explicit"),
     ('implementation(project(":core:persistence"))' in app_gradle,
      "app consumes the persistence module through its declared project dependency"),
-    ("versionCode = 14" in app_gradle and 'versionName = "0.5.10-phase4c-api36-emulator-test-fix"' in app_gradle,
-     "application version is bumped for this API 36 emulator CI fix"),
+    ("versionCode = 15" in app_gradle and 'versionName = "0.5.11-phase4c-api36-adb-test-isolation-fix"' in app_gradle,
+     "application version is bumped for this API 36 ADB test-isolation fix"),
 ]
 
 failed = 0

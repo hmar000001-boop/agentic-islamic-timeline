@@ -38,6 +38,8 @@ jobs:
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "emulator" "system-images;android-36;google_apis;x86_64"
       - name: Scan source for common secret patterns
         run: python3 scripts/secret-scan.py
+      - name: Validate Phase 4 Room publisher-keyring migration
+        run: python3 scripts/check-phase4-schema.py
       - name: Verify Gradle distribution
         run: ./gradlew --version
       - name: Unit tests

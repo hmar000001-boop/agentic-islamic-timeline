@@ -117,13 +117,57 @@ data class InstalledCorpusPackRecord(
     val stableId: String get() = "$packId@$version"
     val relativeIndexPath: String get() = "$packId/$version/corpus.sqlite"
 
-    companion object { const val STATUS_INSTALLED = "INSTALLED" }
+    companion object {
+        const val STATUS_INSTALLED = "INSTALLED"
+        const val STATUS_QUARANTINED = "QUARANTINED"
+        const val STATUS_SUPERSEDED = "SUPERSEDED"
+        const val STATUS_REMOVAL_PENDING = "REMOVAL_PENDING"
+    }
 }
 
+/** Registry operations are deliberately compare-and-set shaped to make lifecycle transitions race-safe. */
 interface CorpusPackRegistry {
     suspend fun isInstalled(packId: String, version: String): Boolean
     suspend fun register(record: InstalledCorpusPackRecord)
     suspend fun listInstalled(): List<InstalledCorpusPackRecord>
+
+    /** Includes quarantined, superseded and removal-pending rows for recovery and audit. */
+    suspend fun listAll(): List<InstalledCorpusPackRecord> = listInstalled()
+
+    /** Atomically switches the one active version to a new version; false means state changed. */
+    suspend fun activateReplacement(expectedCurrentVersion: String, replacement: InstalledCorpusPackRecord): Boolean = false
+
+    /** Atomic status transition guarded by the expected current state. */
+    suspend fun transitionStatus(stableId: String, expectedStatus: String, newStatus: String): Boolean = false
+
+    /** Deletes only the registry row; callers must first complete the filesystem lifecycle. */
+    suspend fun removeRecord(stableId: String): Boolean = false
+}
+
+/** Exact signed publisher-keyring bytes stored in the encrypted application database. */
+class PublisherKeyringEnvelope(
+    val version: Long,
+    payload: ByteArray,
+    signature: ByteArray,
+    val installedAtEpochMillis: Long
+) {
+    private val payloadBytes = payload.copyOf()
+    private val signatureBytes = signature.copyOf()
+    val payload: ByteArray get() = payloadBytes.copyOf()
+    val signature: ByteArray get() = signatureBytes.copyOf()
+
+    init {
+        require(version > 0)
+        require(payloadBytes.isNotEmpty() && payloadBytes.size <= 256 * 1024)
+        require(signatureBytes.size == 64)
+        require(installedAtEpochMillis > 0)
+    }
+}
+
+interface PublisherKeyringStore {
+    suspend fun read(): PublisherKeyringEnvelope?
+    /** Atomically writes only when stored version equals expectedCurrentVersion and incoming is newer. */
+    suspend fun writeIfCurrentVersion(expectedCurrentVersion: Long, envelope: PublisherKeyringEnvelope): Boolean
 }
 
 data class CorpusIndexValidationReport(

@@ -126,6 +126,17 @@ import kotlinx.coroutines.flow.Flow
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertCorpusPack(pack: InstalledCorpusPackEntity)
     @Query("SELECT * FROM installed_corpus_pack WHERE packId = :packId AND version = :version LIMIT 1") suspend fun corpusPack(packId: String, version: String): InstalledCorpusPackEntity?
     @Query("SELECT * FROM installed_corpus_pack WHERE status = 'INSTALLED' ORDER BY installedAtEpochMillis DESC") suspend fun corpusPacks(): List<InstalledCorpusPackEntity>
+    @Query("SELECT * FROM installed_corpus_pack ORDER BY installedAtEpochMillis DESC") suspend fun allCorpusPacks(): List<InstalledCorpusPackEntity>
+    @Query("UPDATE installed_corpus_pack SET status = :newStatus WHERE id = :id AND status = :expectedStatus") suspend fun transitionCorpusPackStatus(id: String, expectedStatus: String, newStatus: String): Int
+    @Query("SELECT COUNT(*) FROM installed_corpus_pack WHERE packId = :packId AND status = 'INSTALLED'") suspend fun countActiveCorpusPacks(packId: String): Int
+    @Query("UPDATE installed_corpus_pack SET status = 'SUPERSEDED' WHERE packId = :packId AND version = :version AND status = 'INSTALLED'") suspend fun supersedeCorpusPack(packId: String, version: String): Int
+    @Query("DELETE FROM installed_corpus_pack WHERE id = :id AND status = 'REMOVAL_PENDING'") suspend fun deleteCorpusPack(id: String): Int
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putModel(model: InstalledModelEntity)
     @Query("SELECT * FROM installed_model ORDER BY installedAtEpochMillis DESC") suspend fun models(): List<InstalledModelEntity>
+}
+
+
+@Dao interface PublisherKeyringDao {
+    @Query("SELECT * FROM publisher_keyring_state WHERE id = 'publisher-root' LIMIT 1") suspend fun current(): PublisherKeyringStateEntity?
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(state: PublisherKeyringStateEntity)
 }

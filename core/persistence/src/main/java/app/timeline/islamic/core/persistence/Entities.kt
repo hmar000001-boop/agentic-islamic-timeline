@@ -277,3 +277,13 @@ data class CanvasStepEntity(
     val stepVersion: Long,
     val updatedAtEpochMillis: Long
 )
+
+/** Stored only inside the SQLCipher database. The signature covers the exact canonical payload bytes. */
+@Entity(tableName = "publisher_keyring_state")
+data class PublisherKeyringStateEntity(
+    @PrimaryKey val id: String,
+    val version: Long,
+    val payload: ByteArray,
+    val signature: ByteArray,
+    val installedAtEpochMillis: Long
+)

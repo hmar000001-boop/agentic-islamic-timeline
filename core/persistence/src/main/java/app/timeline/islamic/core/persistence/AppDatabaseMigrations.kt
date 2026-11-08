@@ -16,4 +16,10 @@ object AppDatabaseMigrations {
             database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_action_execution_proposalId ON action_execution(proposalId)")
         }
     }
+    /** Phase 4B stores the exact signed publisher keyring envelope in the encrypted Room database. */
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("CREATE TABLE IF NOT EXISTS publisher_keyring_state (id TEXT NOT NULL PRIMARY KEY, version INTEGER NOT NULL, payload BLOB NOT NULL, signature BLOB NOT NULL, installedAtEpochMillis INTEGER NOT NULL)")
+        }
+    }
 }

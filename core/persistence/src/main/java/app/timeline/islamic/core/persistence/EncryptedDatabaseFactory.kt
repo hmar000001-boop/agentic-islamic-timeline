@@ -19,7 +19,11 @@ object EncryptedDatabaseFactory {
         val factory = SupportOpenHelperFactory(passphrase)
         return Room.databaseBuilder(context, AppDatabase::class.java, DatabaseKeyManager.DATABASE_NAME)
             .openHelperFactory(factory)
-            .addMigrations(AppDatabaseMigrations.MIGRATION_1_2, AppDatabaseMigrations.MIGRATION_2_3)
+            .addMigrations(
+                AppDatabaseMigrations.MIGRATION_1_2,
+                AppDatabaseMigrations.MIGRATION_2_3,
+                AppDatabaseMigrations.MIGRATION_3_4
+            )
             .build()
     }
 }

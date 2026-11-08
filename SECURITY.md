@@ -27,14 +27,28 @@
 
 ## Release requirements not satisfied by this source tranche
 
-- Execute SQLCipher + Room migration/reopen/recovery tests on API 26, 29, 33 and 36, arm64-v8a and x86_64; verify migration 1→2→3 and commit KSP-generated schema v3 JSON.
+- Execute SQLCipher + Room migration/reopen/recovery tests on API 26, 29, 33 and 36, arm64-v8a and x86_64; verify migration 1→2→3→4 and commit KSP-generated schema v4 JSON.
 - Run instrumented concurrency tests for simultaneous `beginExecution` claims, grant revocation/expiry races, task lease fencing and atomic execution/outbox/audit writes.
 - Key invalidation and restore/recovery threat analysis on supported Samsung/Pixel devices.
 - Dependency vulnerability and license review for every release dependency.
 - OWASP MASVS review and privacy/Play declaration review.
-- Corpus signing-key management, Ed25519 provider validation and signed-pack import checks.
+- Pin and review a production Ed25519 publisher root key; define root-key rotation and incident response; do not enable pack imports before this gate.
+- Test canonical keyring parsing, publisher-key history/revocation, transactional update rollback, SAF import, Room migration 3→4 and pack quarantine/removal lifecycle on supported Android versions.
+- The local monotonic keyring version has no independent hardware anti-rollback anchor against restoration of an older full encrypted database image.
 
 
 ## Agent recovery lifecycle
 
 Audit verification and outbox/lease reconciliation run once per Android process under a mutex. Activity recreation reuses the successful recovery result and does not reinterpret a live execution as an interrupted process. A new process verifies the audit chain and reconciles any `CLAIMED`/`EXECUTING` operation before agent entry points become available.
+
+
+## Corpus publisher trust and lifecycle (Phase 4B)
+
+- Publisher keyrings are accepted only when the exact canonical payload verifies under a root public key injected by reviewed application build configuration. No default or demo production root key exists.
+- Keyring bytes, detached Ed25519 signature, version and installation timestamp are stored inside SQLCipher-protected Room table `publisher_keyring_state`; the persistence adapter uses a transactional compare-and-set against the expected current version.
+- Keyring refresh/install operations are serialized in-process. Publisher key IDs, key bytes and activation times cannot be rebound; historical keys cannot be removed; a recorded revocation cannot be reversed.
+- Corpus pack updates only activate a strictly newer version if the expected old version is still active. The registry transition is atomic and prior versions remain `SUPERSEDED` until explicit removal.
+- Startup revalidation quarantines a pack if its canonical manifest, publisher signature/active window, signed index hash, license profile, SQLite metadata or private filesystem path fails verification.
+- Removal enters `REMOVAL_PENDING` before file deletion; deletion refuses symlinks and out-of-root canonical paths; an interrupted removal is retried at startup.
+- SAF import adapters accept user-selected `content://` URIs only and stream through bounded parsers. App-level picker/management UI and application startup wiring remain incomplete.
+- Residual: compare-and-set prevents concurrent/ordinary stale updates, not a full old-database restore by an attacker with control of app data. There is no independent hardware rollback counter. Publisher-root rotation also requires a reviewed application update.

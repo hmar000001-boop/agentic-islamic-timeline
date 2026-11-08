@@ -1,6 +1,6 @@
-# Timeline agentique — Android source foundation (Phases 1–4A)
+# Timeline agentique — Android source foundation (Phases 1–4B)
 
-**Version:** `0.4.0-phase4-knowledge-foundation`  
+**Version:** `0.4.1-phase4b-publisher-trust-lifecycle`  
 **Architecture:** `Cahier_architecture_Timeline_agentique_v1.2.md`  
 **Readiness:** `Rapport_final_readiness_demarrage_Timeline_agentique.md`  
 **Package ID:** provisional `app.timeline.islamic`  
@@ -11,7 +11,7 @@
 - Incremental multi-module Android project: `app`, `core:common`, `core:timeline-api`, `core:agent-api`, `core:authorization`, `core:agent-runtime`, `core:security`, `core:localization`, `core:persistence`, `core:knowledge-api`, `core:corpus`, `core:retrieval`, `feature:timeline`, and `feature:canvas`.
 - Android API baseline: min 26, compile/target 36; Java/Kotlin bytecode target 17.
 - Offline and Play-distribution product flavors. Both currently have **no INTERNET permission**; Play AI Delivery is not integrated.
-- Room 2 schema v3 (**24 user-state tables; explicit migrations 1→2 and 2→3**), DAO set, Timeline repository adapter, SQLCipher Room 2 helper factory, Keystore-wrapped random database passphrase.
+- Room 2 schema v4 (**25 registered entities; explicit migrations 1→2→3→4**), DAO set, Timeline repository adapter, SQLCipher Room 2 helper factory, Keystore-wrapped random database passphrase.
 - Database passphrase envelope under `noBackupFilesDir`, atomic file replacement, and fail-closed handling if database exists but the envelope/key cannot be recovered.
 - Room tables also cover task leases/events, Canvas steps/artifacts/snapshots, action outbox/execution receipts, Hifz records, prayer profiles, attachments, installed corpus packs and installed models.
 - DataStore locale preference contract and Arabic/English resources.
@@ -32,7 +32,12 @@
 - Phase 4A Corpus Pack format v1: canonical UTF-8 manifest, Ed25519 signatures over exact manifest bytes, SHA-256 index binding, strict ZIP entry allowlist, bounded extraction, bundled-SQLite/FTS5 validation, app-private staging and atomic installation, and Room registry adapter using the existing table (no schema migration).
 - Phase 4A retrieval: bundled SQLite FTS5/BM25 with external-content index integrity validation, per-pack lexical channels, optional local dense-retriever contract, rank-only Reciprocal Rank Fusion, source/license/review/madhhab and stable-citation rechecks, evidence-text hash rechecks, and an explicit trace for dense-provider failure that never reports RRF score as confidence or claims an unavailable reranker.
 - Phase 4A tests: focused JVM tests for request eligibility, canonical manifests, Ed25519 vectors, RRF and retrieval fallback; Android instrumentation source tests for bundled SQLite FTS5/index integrity and pack installation rejection/rollback paths.
-- The Corpus Pack installer deliberately fails closed until the app supplies a pinned publisher keyring. No publisher private key or unlicensed religious corpus content is included in this archive.
+- Phase 4B publisher trust: canonical signed publisher keyring with monotonically increasing version, pinned-root Ed25519 verification contract, retained key history, immutable key IDs/public keys/activation times, permanent revocation history, and an encrypted Room compare-and-set store. Refresh/install operations are serialized to prevent stale in-memory trust publication.
+- Phase 4B archive/SAF import: strict root-signed two-entry keyring archive (`keyring.txt`, `keyring.sig`); bounded stream parsing; `content://` SAF adapters for publisher keyring and corpus pack import/update; import streams directly into private storage and never extracts to shared storage.
+- Phase 4B pack lifecycle: Room v4 `publisher_keyring_state` migration 3→4; inventory states `INSTALLED`, `QUARANTINED`, `SUPERSEDED`, `REMOVAL_PENDING`; transactionally switch the active version on update; startup integrity revalidation and quarantine/restore; removal intent and crash recovery; symlink/path-safe deletion; explicit pack downgrade rejection.
+- Added Phase 4 schema guard to CI, Room keyring persistence/lifecycle instrumentation source tests, keyring parser/manager/archive tests, and update/revalidation/removal integration harness checks.
+- No production publisher root key is pinned in this archive. The app must supply a reviewed root public key through a controlled build configuration before signed keyrings and pack imports can be enabled. No publisher private key or unlicensed religious corpus content is included.
+- Keyring rollback protection uses monotonic compare-and-set in the encrypted local database. It does not have an independent hardware anti-rollback anchor against restoration of an older complete database image; this is documented as a residual threat-model limitation.
 
 ## Honest verification status
 
@@ -92,7 +97,7 @@ Gradle dependency locking is enabled for all configurations, and dynamic depende
 - First launch with no DB and no envelope: create a random 256-bit passphrase and persist the encrypted envelope atomically.
 - Existing DB with missing envelope: stop with an explicit unrecoverable-key error; never generate a replacement key and never delete the database automatically.
 - Invalid envelope, missing Keystore key, authentication failure or native SQLCipher load failure: fail closed; no plaintext fallback.
-- Room schema: version 3; 24 private-state tables; no destructive migration fallback. Migration 1→2 adds `pending_approval.sourceGrantId`; migration 2→3 adds `action_execution.proposalId` and its unique index. The Room JSON snapshot is processor-generated on the first successful Gradle/KSP build and must be committed before any release branch; it is not fabricated here. Migration tests must be executed on an Android build runner.
+- Room schema: version 4; 25 registered entities; no destructive migration fallback. Migration 1→2 adds `pending_approval.sourceGrantId`; migration 2→3 adds `action_execution.proposalId` and its unique index; migration 3→4 creates encrypted `publisher_keyring_state` for the exact signed publisher-keyring envelope. The Room JSON snapshot is processor-generated on the first successful Gradle/KSP build and must be committed before any release branch; it is not fabricated here. Migration tests must be executed on an Android build runner.
 - Sensitive user data must not be entered until the SQLCipher/Keystore instrumentation suite passes on supported API/ABI targets.
 
 ## Phase 1 boundaries
@@ -103,7 +108,7 @@ The Timeline and Canvas are now real Room-backed feature modules, but this is th
 
 Phase 3 now implements the persistent task runtime, authorization decision service, approval/grant lifecycle, atomic execution gate, Room outbox transitions and startup reconciliation. It does not yet include production OS tool adapters, a model-driven `AgentStepProcessor`, tool registry population, decision-card UI, or WorkManager scheduling. No external action type is currently registered by the app, so this tranche cannot mutate Calendar/Contacts/files or other Android resources by itself. The processor and tool-handler interfaces are extension points, not simulated integrations.
 
-Phase 4A now provides the first signed local corpus-pack and lexical retrieval foundation. It is not the completion of Phase 4. Still not implemented: a production publisher keyring and key-rotation process; pack authoring/curation/signing tooling; vector embedding generation and local vector index/search; a concrete local dense-retrieval provider; a benchmarked reranker; app-level SAF import and pack-management UI; evidence/citation cards; scholarly review workflows; model manager/LiteRT-LM; OCR/ASR; prayer calculations; Hifz evaluation; notifications; recurring habits; or religious verdict generation. These remain later implementation tranches and release gates. The Hifz persistent grant is intentionally the only grant type in Phase 3, for `hifz.adjust_review_interval` only, exact plan/revision/schedule fingerprint, bounded delta, 30-day maximum lifetime and active policy version `hifz-interval.v1`. Grant-authoring UI and a user-confirmation workflow to issue a grant are not wired into the application yet.
+Phase 4A/4B now provide the local corpus-pack, lexical retrieval, publisher-keyring trust/lifecycle, SAF streaming import adapters, pack updates and revalidation foundation. They are not the completion of Phase 4. Still not implemented: a pinned production publisher root key and operational publisher-key ceremony; pack authoring/curation/signing tooling; vector embedding generation and local vector index/search; a concrete local dense-retrieval provider; a benchmarked reranker; app-level SAF picker and pack-management UI; evidence/citation cards; scholarly review workflows; model manager/LiteRT-LM; OCR/ASR; prayer calculations; Hifz evaluation; notifications; recurring habits; or religious verdict generation. These remain later implementation tranches and release gates. The Hifz persistent grant is intentionally the only grant type in Phase 3, for `hifz.adjust_review_interval` only, exact plan/revision/schedule fingerprint, bounded delta, 30-day maximum lifetime and active policy version `hifz-interval.v1`. Grant-authoring UI and a user-confirmation workflow to issue a grant are not wired into the application yet.
 
 ## Continuity and checkpoints
 
@@ -123,17 +128,31 @@ Phase 4A now provides the first signed local corpus-pack and lexical retrieval f
 - The HMAC audit chain detects modified/reordered records and missing historical Keystore keys. It does not provide an independent anti-truncation anchor: deletion of the entire tail (or entire table) cannot be proven from the local chain alone. Do not call it tamper-proof.
 - `agentRuntimeReady` is set only after full audit verification and recovery. App-level task, approval and gateway entry points check this gate. Initialization is mutex-protected and cached once per process so Activity recreation cannot reconcile a still-live `EXECUTING` operation as a crashed one. A new process performs recovery again.
 
-## Phase 4A — knowledge and retrieval foundation
+## Phase 4 — knowledge and retrieval foundation
+
+### Phase 4A — knowledge, packs and lexical retrieval
 
 - `:core:knowledge-api` owns source metadata, evidence passage and retrieval contracts. It keeps `originalText` separate from `normalizedText`; original quotations are never replaced by search normalization.
 - `:core:corpus` parses the canonical Corpus Pack v1 manifest and installs the exact three-entry archive (`manifest.txt`, `manifest.sig`, `corpus.sqlite`). The Ed25519 signature covers exact manifest bytes; the signed manifest binds the SQLite index SHA-256. ZIP traversal, duplicate entries, unexpected entries, size overflow and non-atomic installation are rejected.
 - `:core:retrieval` uses `BundledSQLiteDriver` / FTS5, not the device's framework SQLite build. Each corpus database contributes its own lexical ranking channel; raw BM25 values from independent databases are never compared. RRF operates on one-based ranks and outputs a ranking utility, not a probability/confidence.
 - Every source in an installable pack must have explicitly cleared redistribution rights and approved scholarly review metadata. Import validates the source eligibility window, language and madhhab enums, stable evidence identity and exact UTF-8 SHA-256 of each original passage. Retrieval rechecks eligibility, language, madhhab and original-text hash.
 - Null madhhab means no school-specific exclusion. Selecting a school retains `ALL` and `COMPARATIVE` passages in addition to that school; other school-specific passages are excluded.
-- The Room `installed_corpus_pack` table is reused; Room schema remains v3 / 24 entities. Corpus indexes are separate immutable app-private SQLite files, not user-state databases.
-- The format and local index code are implemented, but this application build currently has no pinned production publisher keys, no signed content packs, no app SAF screen/wiring, and no dense-vector index/provider or reranker. Consequently no real Quran/hadith/tafsir/fiqh content is bundled or claimed as licensed/approved.
+- The `installed_corpus_pack` table holds pack inventory; corpus indexes are separate immutable app-private SQLite files, not user-state databases.
 
-See [`docs/phase4/corpus-pack-format-v1.md`](docs/phase4/corpus-pack-format-v1.md) for the pack contract and [`docs/phase4/phase4a-implementation.md`](docs/phase4/phase4a-implementation.md) for scope and remaining gates.
+See [`docs/phase4/corpus-pack-format-v1.md`](docs/phase4/corpus-pack-format-v1.md) for the pack contract and [`docs/phase4/phase4a-implementation.md`](docs/phase4/phase4a-implementation.md) for Phase 4A details.
+
+### Phase 4B — publisher trust and pack lifecycle
+
+- `PublisherKeyringManager` verifies canonical keyring bytes against an injected pinned Ed25519 root key. The keyring version is monotonic; refresh/install are serialized; persisted updates use compare-and-set in Room; active publisher key IDs cannot be rebound or removed and a revocation cannot be undone.
+- Root-signed keyring archives contain exactly `keyring.txt` and `keyring.sig`. Both keyring and corpus pack SAF adapters require a user-selected `content://` URI and stream input into the bounded import path.
+- Room schema is v4 with 25 registered entities. Migration 3→4 adds `publisher_keyring_state`, storing the exact signed keyring payload/signature inside the existing SQLCipher database. The schema JSON remains pending actual KSP generation on Android CI.
+- Pack updates require a strictly newer semantic version and an expected-current-version match. The filesystem is staged under private app files and atomically moved; a Room transaction supersedes the former active version and inserts the new version. Old versions are retained until explicit removal.
+- Startup revalidation rechecks directory/file safety, canonical manifest, pack signature, publisher activation/revocation window, signed index SHA-256, license profile and index metadata. Invalid active packs are quarantined and excluded from retrieval; valid quarantined packs may be restored after a reviewed keyring update.
+- Removal is stateful (`REMOVAL_PENDING` first), symlink/path checks prevent traversal, and startup completes interrupted removals. Install/update, removal and orphan cleanup share one mutation mutex; filesystem hashing/deletion runs on `Dispatchers.IO`. The Room adapter rejects illegal lifecycle transitions and permits row deletion only after removal is pending.
+- `CorpusPackRuntime` defines the ordered keyring → pending-removal recovery → orphan cleanup → revalidation sequence. It is an integration component; the app does not ship a production root key or expose pack/keyring management UI yet.
+- Residual trust limitation: monotonicity is enforced in the encrypted local DB and concurrent in-process updates are serialized, but there is no independent hardware anti-rollback anchor against restoration of an older complete DB image. Publisher-root rotation requires an app update/reviewed trust migration.
+
+See [`docs/phase4/phase4b-publisher-trust-and-lifecycle.md`](docs/phase4/phase4b-publisher-trust-and-lifecycle.md) for the lifecycle and keyring format. No production root key, publisher private key or real scholarly content pack is bundled.
 
 ## Phase 2 implementation status
 
@@ -158,7 +177,7 @@ The locally invoked Kotlin test harness executed seven targeted unit-test method
 | Version catalog parse | Passed | TOML syntax and declared version catalog; dependency resolution not performed. |
 | Offline manifest check | Passed | Source manifest has no `INTERNET`; merged manifest remains a CI check. |
 | Migration SQL smoke test | Passed | SQLite in-memory check of the two ALTER/index steps; not Room MigrationTestHelper or real legacy DB. |
-| Room entity inventory | Passed | 24 entity registrations and DB version 3 checked statically. |
+| Room entity inventory | Passed | 25 entity registrations and DB version 4 checked statically. |
 | Room/KSP/SQLCipher Android compile | **Not run** | Gradle bootstrap DNS failure and no Android SDK in authoring environment. |
 | Room/Keystore instrumentation suite | **Not run** | Instrumentation tests are present; must run on API 36 emulator and supported physical devices. |
 

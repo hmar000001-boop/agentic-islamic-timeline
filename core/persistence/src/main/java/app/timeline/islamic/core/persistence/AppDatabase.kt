@@ -28,9 +28,10 @@ import androidx.room.RoomDatabase
         InstalledModelEntity::class,
         AgentTaskLeaseEntity::class,
         AgentTaskEventEntity::class,
-        CanvasStepEntity::class
+        CanvasStepEntity::class,
+        PublisherKeyringStateEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -43,4 +44,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun actionOutboxDao(): ActionOutboxDao
     abstract fun userDomainDataDao(): UserDomainDataDao
     abstract fun installedArtifactDao(): InstalledArtifactDao
+    abstract fun publisherKeyringDao(): PublisherKeyringDao
 }

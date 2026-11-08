@@ -24,6 +24,9 @@ import java.nio.file.StandardCopyOption
 
 class CorpusPackInstallException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
+/** Serializes install/update, removal and startup orphan cleanup over the same private pack tree. */
+internal object CorpusPackMutationLock { val mutex = Mutex() }
+
 data class CorpusPackInstallResult(
     val packId: String,
     val version: String,
@@ -48,11 +51,21 @@ class CorpusPackInstaller(
 ) {
     private val appContext = context.applicationContext
 
-    suspend fun install(archive: InputStream): CorpusPackInstallResult = PROCESS_INSTALL_MUTEX.withLock {
+    suspend fun install(archive: InputStream): CorpusPackInstallResult = installInternal(archive, expectedCurrentVersion = null)
+
+    /** Installs a strictly newer version and atomically switches registry visibility from the expected active version. */
+    suspend fun update(archive: InputStream, expectedCurrentVersion: String): CorpusPackInstallResult {
+        require(expectedCurrentVersion.matches(SEMVER_PATTERN)) { "Expected active pack version is invalid" }
+        return installInternal(archive, expectedCurrentVersion)
+    }
+
+    private suspend fun installInternal(archive: InputStream, expectedCurrentVersion: String?): CorpusPackInstallResult = CorpusPackMutationLock.mutex.withLock {
         withContext(Dispatchers.IO) {
         val root = File(appContext.filesDir, "corpus-packs")
         if (!root.exists() && !root.mkdirs()) throw CorpusPackInstallException("Unable to create private corpus directory")
-        if (!root.isDirectory) throw CorpusPackInstallException("Corpus directory is not a directory")
+        if (!root.isDirectory || Files.isSymbolicLink(root.toPath())) throw CorpusPackInstallException("Corpus directory is not a safe private directory")
+        val filesRoot = appContext.filesDir.canonicalFile
+        if (!root.canonicalPath.startsWith(filesRoot.path + File.separator)) throw CorpusPackInstallException("Corpus directory escaped app-private storage")
         val staging = File(root, ".staging-${UUID.randomUUID()}")
         if (!staging.mkdir()) throw CorpusPackInstallException("Unable to create private staging directory")
         var committedDirectory: File? = null
@@ -65,7 +78,9 @@ class CorpusPackInstaller(
             val key = keyring.find(manifest.keyId) ?: fail("Publisher key '${manifest.keyId}' is not trusted on this build")
             val now = clock()
             if (manifest.createdAtEpochMillis > now) fail("Corpus pack creation time is in the future")
-            if (!key.isActiveAt(now)) fail("Publisher key is not active or has been revoked")
+            if (!key.isActiveAt(now) || !key.isActiveAt(manifest.createdAtEpochMillis)) {
+                fail("Publisher key was not active at manifest creation or is now revoked")
+            }
             if (key.keyId != manifest.keyId) fail("Publisher key identifier mismatch")
             if (!signatureVerifier.verify(manifestBytes, signature, key.rawPublicKey)) fail("Corpus manifest signature is invalid")
 
@@ -81,9 +96,16 @@ class CorpusPackInstaller(
                 validation.languages != manifest.languages) {
                 fail("Corpus index metadata does not match its signed manifest")
             }
-            val installedRecords = registry.listInstalled()
-            if (installedRecords.any { it.packId == manifest.packId }) {
-                fail("A version of this pack is already installed; pack replacement requires the dedicated update workflow")
+            val installedRecords = registry.listInstalled().filter { it.packId == manifest.packId }
+            if (expectedCurrentVersion == null) {
+                if (installedRecords.isNotEmpty()) fail("A version of this pack is already active; use the update workflow")
+            } else {
+                if (installedRecords.size != 1 || installedRecords.single().version != expectedCurrentVersion) {
+                    fail("Expected active pack version changed; update aborted")
+                }
+                if (compareSemanticVersions(manifest.packVersion, expectedCurrentVersion) <= 0) {
+                    fail("Corpus pack update must be a strictly newer semantic version")
+                }
             }
 
             // Retain exact signed metadata beside the immutable index for later audit and trust revalidation.
@@ -92,11 +114,13 @@ class CorpusPackInstaller(
 
             val packParent = File(root, manifest.packId)
             if (!packParent.exists() && !packParent.mkdir()) fail("Unable to create pack destination")
-            if (!packParent.isDirectory) fail("Pack destination is not a directory")
+            if (!packParent.isDirectory || Files.isSymbolicLink(packParent.toPath()) ||
+                packParent.canonicalFile.parentFile != root.canonicalFile) fail("Pack destination is not a safe child directory")
             val destination = File(packParent, manifest.packVersion)
             if (destination.exists()) {
-                // A previous process may have died after the directory rename but before the Room commit.
-                if (!destination.isDirectory || !destination.deleteRecursively()) fail("Unregistered pack destination cannot be safely recovered")
+                // Never delete a version directory as an implicit recovery action: it may be a retained
+                // superseded version. Startup orphan recovery owns unregistered-directory cleanup.
+                fail("Target pack version directory already exists; recover or remove it explicitly first")
             }
             // The staging directory is under the same app-private root; do not fall back to a non-atomic copy.
             try {
@@ -115,7 +139,13 @@ class CorpusPackInstaller(
             )
             try {
                 withContext(NonCancellable) {
-                    registry.register(record)
+                    val committed = if (expectedCurrentVersion == null) {
+                        registry.register(record)
+                        true
+                    } else {
+                        registry.activateReplacement(expectedCurrentVersion, record)
+                    }
+                    if (!committed) fail("Pack registry changed concurrently; update was not activated")
                     registryCommitted = true
                 }
             } catch (e: Exception) {
@@ -132,10 +162,10 @@ class CorpusPackInstaller(
         } catch (e: Exception) {
             throw CorpusPackInstallException("Corpus pack import failed", e)
         } finally {
-            staging.deleteRecursively()
+            safeDeleteTree(staging, root)
             committedDirectory?.let { directory ->
                 // The registry and filesystem cannot share a transaction; a failed commit is rolled back.
-                if (!registryCommitted) directory.deleteRecursively()
+                if (!registryCommitted) safeDeleteTree(directory, root)
             }
         }
         }
@@ -231,27 +261,54 @@ class CorpusPackInstaller(
     }
 
     /** Removes only unregistered pack directories left behind by a process death during installation. */
-    suspend fun removeUnregisteredPackDirectories(): Int = PROCESS_INSTALL_MUTEX.withLock {
+    suspend fun removeUnregisteredPackDirectories(): Int = CorpusPackMutationLock.mutex.withLock {
         withContext(Dispatchers.IO) {
             val root = File(appContext.filesDir, "corpus-packs")
-            if (!root.isDirectory) return@withContext 0
-            val installedIds = registry.listInstalled().map { it.stableId }.toSet()
+            if (Files.isSymbolicLink(root.toPath()) || !root.isDirectory) return@withContext 0
+            val filesRoot = appContext.filesDir.canonicalFile
+            val canonicalRoot = root.canonicalFile
+            if (!canonicalRoot.path.startsWith(filesRoot.path + File.separator)) return@withContext 0
+            val installedIds = registry.listAll().map { it.stableId }.toSet()
             var removed = 0
             root.listFiles()?.forEach { packDirectory ->
                 if (!packDirectory.isDirectory) return@forEach
+                if (Files.isSymbolicLink(packDirectory.toPath())) return@forEach
                 if (packDirectory.name.startsWith(".staging-") || packDirectory.name.startsWith(".incoming-")) {
-                    if (packDirectory.deleteRecursively()) removed++
+                    if (safeDeleteTree(packDirectory, root)) removed++
                     return@forEach
                 }
                 if (!packDirectory.name.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))) return@forEach
                 packDirectory.listFiles()?.forEach { versionDirectory ->
-                    if (versionDirectory.isDirectory && "${packDirectory.name}@${versionDirectory.name}" !in installedIds) {
-                        if (versionDirectory.deleteRecursively()) removed++
+                    if (versionDirectory.isDirectory && !Files.isSymbolicLink(versionDirectory.toPath()) &&
+                        "${packDirectory.name}@${versionDirectory.name}" !in installedIds) {
+                        if (safeDeleteTree(versionDirectory, root)) removed++
                     }
                 }
             }
             removed
         }
+    }
+
+    private fun safeDeleteTree(target: File, root: File): Boolean {
+        return try {
+            if (Files.isSymbolicLink(target.toPath())) return false
+            val canonicalRoot = root.canonicalFile
+            val canonicalTarget = target.canonicalFile
+            if (!canonicalTarget.path.startsWith(canonicalRoot.path + File.separator)) return false
+            Files.walkFileTree(canonicalTarget.toPath(), object : java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+                override fun visitFile(file: java.nio.file.Path, attrs: java.nio.file.attribute.BasicFileAttributes): java.nio.file.FileVisitResult {
+                    if (Files.isSymbolicLink(file)) throw java.io.IOException("Symlink found in corpus directory")
+                    Files.delete(file)
+                    return java.nio.file.FileVisitResult.CONTINUE
+                }
+                override fun postVisitDirectory(dir: java.nio.file.Path, exc: java.io.IOException?): java.nio.file.FileVisitResult {
+                    if (exc != null || Files.isSymbolicLink(dir)) throw java.io.IOException("Unsafe corpus directory")
+                    Files.delete(dir)
+                    return java.nio.file.FileVisitResult.CONTINUE
+                }
+            })
+            true
+        } catch (_: Exception) { false }
     }
 
     private fun writeSynced(file: File, bytes: ByteArray) {
@@ -282,11 +339,43 @@ class CorpusPackInstaller(
     private fun fail(message: String): Nothing = throw CorpusPackInstallException(message)
 
     private companion object {
-        val PROCESS_INSTALL_MUTEX = Mutex()
         const val MAX_ARCHIVE_BYTES = 2L * 1024 * 1024 * 1024
         const val MAX_EXPANDED_BYTES = 4L * 1024 * 1024 * 1024
         const val MAX_INDEX_BYTES = 4L * 1024 * 1024 * 1024
         const val MAX_MANIFEST_BYTES = 64 * 1024
         const val SIGNATURE_BYTES = 64
+        val SEMVER_PATTERN = Regex("(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?")
+    }
+
+    private fun compareSemanticVersions(left: String, right: String): Int {
+        data class Version(val major: Long, val minor: Long, val patch: Long, val pre: String?)
+        fun parse(value: String): Version {
+            val parts = value.split('-', limit = 2)
+            val numbers = parts[0].split('.').map { it.toLong() }
+            return Version(numbers[0], numbers[1], numbers[2], parts.getOrNull(1))
+        }
+        val a = parse(left); val b = parse(right)
+        val numeric = compareValuesBy(a, b, Version::major, Version::minor, Version::patch)
+        if (numeric != 0) return numeric
+        if (a.pre == null && b.pre != null) return 1
+        if (a.pre != null && b.pre == null) return -1
+        return comparePreRelease(a.pre, b.pre)
+    }
+
+    private fun comparePreRelease(left: String?, right: String?): Int {
+        if (left == null || right == null) return 0
+        val a = left.split('.', '-'); val b = right.split('.', '-')
+        for (index in 0 until minOf(a.size, b.size)) {
+            val x = a[index]; val y = b[index]
+            val xn = x.toLongOrNull(); val yn = y.toLongOrNull()
+            val compared = when {
+                xn != null && yn != null -> xn.compareTo(yn)
+                xn != null -> -1
+                yn != null -> 1
+                else -> x.compareTo(y)
+            }
+            if (compared != 0) return compared
+        }
+        return a.size.compareTo(b.size)
     }
 }

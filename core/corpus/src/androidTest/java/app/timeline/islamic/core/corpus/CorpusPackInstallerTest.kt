@@ -140,6 +140,42 @@ class CorpusPackInstallerTest {
         }
     }
 
+
+    @Test fun updateActivatesOnlyStrictlyNewerVersionAndRetainsSupersededEvidence() = runBlocking {
+        val packId = uniquePackId("update")
+        val v1 = fixture(packId, version = "1.0.0")
+        val v2 = fixture(packId, version = "1.1.0")
+        val registry = MemoryRegistry()
+        try {
+            v1.installer(registry).install(ByteArrayInputStream(v1.archive))
+            val updated = v2.installer(registry).update(ByteArrayInputStream(v2.archive), "1.0.0")
+            assertEquals("1.1.0", updated.version)
+            assertEquals(1, registry.records.count { it.status == InstalledCorpusPackRecord.STATUS_INSTALLED })
+            assertEquals(1, registry.records.count { it.status == InstalledCorpusPackRecord.STATUS_SUPERSEDED })
+            assertTrue(File(context.filesDir, "corpus-packs/$packId/1.0.0/corpus.sqlite").isFile)
+            assertTrue(File(context.filesDir, "corpus-packs/$packId/1.1.0/corpus.sqlite").isFile)
+        } finally {
+            File(context.filesDir, "corpus-packs/$packId").deleteRecursively()
+        }
+    }
+
+    @Test fun updateRejectsDowngradeAndPreservesCurrentActiveVersion() = runBlocking {
+        val packId = uniquePackId("downgrade")
+        val v1 = fixture(packId, version = "2.0.0")
+        val downgrade = fixture(packId, version = "1.9.9")
+        val registry = MemoryRegistry()
+        try {
+            v1.installer(registry).install(ByteArrayInputStream(v1.archive))
+            expectInstallFailure {
+                runBlocking { downgrade.installer(registry).update(ByteArrayInputStream(downgrade.archive), "2.0.0") }
+            }
+            assertEquals(listOf("2.0.0"), registry.listInstalled().map { it.version })
+            assertFalse(File(context.filesDir, "corpus-packs/$packId/1.9.9").exists())
+        } finally {
+            File(context.filesDir, "corpus-packs/$packId").deleteRecursively()
+        }
+    }
+
     private data class Fixture(
         val packId: String,
         val archive: ByteArray,
@@ -169,13 +205,14 @@ class CorpusPackInstallerTest {
 
     private fun fixture(
         packId: String,
-        extraEntries: Map<String, ByteArray> = emptyMap()
+        extraEntries: Map<String, ByteArray> = emptyMap(),
+        version: String = "1.0.0"
     ): Fixture {
         val index = "fixture-corpus-sqlite".toByteArray(Charsets.UTF_8)
         val manifest = CorpusPackManifest(
             schemaVersion = 1,
             packId = packId,
-            packVersion = "1.0.0",
+            packVersion = version,
             createdAtEpochMillis = 1_000L,
             keyId = "publisher-test",
             licenseProfile = "fixture-cleared",
@@ -205,7 +242,15 @@ class CorpusPackInstallerTest {
             records += record
         }
 
-        override suspend fun listInstalled(): List<InstalledCorpusPackRecord> = records.toList()
+        override suspend fun listInstalled(): List<InstalledCorpusPackRecord> = records.filter { it.status == InstalledCorpusPackRecord.STATUS_INSTALLED }
+        override suspend fun listAll(): List<InstalledCorpusPackRecord> = records.toList()
+        override suspend fun activateReplacement(expectedCurrentVersion: String, replacement: InstalledCorpusPackRecord): Boolean {
+            if (failRegistration) return false
+            val current = records.singleOrNull { it.packId == replacement.packId && it.version == expectedCurrentVersion && it.status == InstalledCorpusPackRecord.STATUS_INSTALLED } ?: return false
+            records[records.indexOf(current)] = current.copy(status = InstalledCorpusPackRecord.STATUS_SUPERSEDED)
+            records += replacement
+            return true
+        }
     }
 
     private fun uniquePackId(prefix: String) = "$prefix-${java.util.UUID.randomUUID().toString().replace("-", "")}"

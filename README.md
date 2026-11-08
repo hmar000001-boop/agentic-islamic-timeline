@@ -1,18 +1,24 @@
 # Timeline Agentique
 
-**Version:** `0.5.2-phase4c-compose-api37`  
-**Android:** minSdk 26 · compileSdk 37 · targetSdk 36  
+**Version:** `0.5.3-phase4c-compile-sdk37.0`  
+**Android:** minSdk 26 · compileSdk 37.0 · targetSdk 36  
 **Build:** AGP 9.3.1 · Gradle 9.5.0 · Kotlin 2.4.21 · KSP 2.3.13
+
+## 0.5.3 CI correction — Android SDK Platform 37.0
+
+Android SDK Platform 37 is published by the SDK Manager as `platforms;android-37.0`, not `platforms;android-37`. CI installs the exact `37.0` package and verifies `android.jar` plus `source.properties` before Gradle starts. Every Android module uses AGP's typed `compileSdk { version = release(37) { minorApiLevel = 0 } }` DSL, so Gradle resolves the correct platform identity without a filesystem alias. The app remains `targetSdk 36`; the CI runtime emulator remains API 36.
+
+`python3 scripts/test-android-sdk-platform.py` tests the validator against missing, wrong-version, incomplete and symlink-escape SDK layouts. `scripts/verify-android-sdk-platform.py` checks the real installed SDK in CI.
 
 ## 0.5.2 CI correction — Compose API 37
 
-The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artifacts require `compileSdk 37`. All 15 Android modules now compile against API 37. The app's `targetSdk` remains 36 and CI keeps the API 36 emulator for runtime compatibility tests; compile SDK and target SDK serve different purposes. CI installs Android SDK Platforms 36 and 37.
+The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artifacts require `compileSdk 37`. All 15 Android modules now compile against API 37.0. The app's `targetSdk` remains 36 and CI keeps the API 36 emulator for runtime compatibility tests; compile SDK and target SDK serve different purposes. CI installs Android SDK Platforms 36 and 37.0.
 
 `python3 scripts/verify-compose-compile-sdk.py` checks this split and is executed by GitHub Actions.
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.2-phase4c-compose-api37`  
+**Current source version:** `0.5.3-phase4c-compile-sdk37.0`  
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`  
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`  
 **Package ID:** provisional `app.timeline.islamic`  

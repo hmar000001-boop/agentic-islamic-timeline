@@ -1,3 +1,11 @@
+## 0.5.3-phase4c-android-sdk-37.0 — 2026-11-08
+- Fixed the GitHub Actions SDK Manager failure caused by requesting the nonexistent package path `platforms;android-37`; the published API 37 platform package is `platforms;android-37.0`.
+- Migrated all 15 Android modules from the integer-only compileSdk setter to AGP's typed minor-API DSL: `compileSdk { version = release(37) { minorApiLevel = 0 } }`. This encodes the exact platform identity and avoids an ad-hoc SDK directory symlink.
+- Added a pre-Gradle SDK verifier that checks `platforms/android-37.0/android.jar`, `source.properties`, API level 37, minor API level 0, and that the resolved platform stays inside the SDK platforms directory.
+- Added six SDK-layout regression tests for correct installation, missing package, old package-name-only layout, wrong API/minor level, missing android.jar and symlink escape.
+- Kept `targetSdk = 36`, `minSdk = 26`, API 36 emulator and Build Tools 36.0.0 unchanged. No app runtime behavior or database schema changed.
+- Local Python guards, Room schema checks, Phase 4C checks, AGP built-in Kotlin checks, bootstrap regression and secret scan passed. Real Gradle/KSP/Android device CI must still be rerun on GitHub Actions.
+
 # Changelog
 
 ## 0.5.1-phase4c-buildconfig-nullability-fix — 2026-11-08

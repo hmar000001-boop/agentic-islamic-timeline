@@ -1,6 +1,6 @@
-## 0.5.11 CI correction — API 36 emulator test ADB isolation
+## 0.5.12 CI correction — API 36 QEMU host library
 
-The latest Actions run timed out in the mocked successful-startup test. The workflow exports `ADB` at job scope, and the test copied that environment while replacing only `ANDROID_HOME`; therefore the startup script called the real runner ADB rather than the fake SDK ADB. Since the fake emulator cannot register with the real ADB server, the script correctly remained in its bounded device-registration loop and the test's 20-second timeout expired. The test now explicitly overrides `ADB` with its temporary mock, records mock invocations, and asserts that all expected commands use the mock. The production startup script and its 180/600-second deadlines are unchanged. The test suite passes 6/6 with a pre-existing inherited `ADB` variable; real hosted emulator boot and instrumentation still require Actions verification.
+The latest hosted emulator step reached the Android Emulator launcher, but QEMU could not load `libpulse.so.0` and exited with code 127 before an Android guest started. The Ubuntu runner now installs the `libpulse0` client runtime package; no PulseAudio server or app audio feature is installed. Before creating the AVD, the startup script checks the x86_64 QEMU binary with `ldd` and fails with the exact unresolved library names if host dependencies are missing. Tests cover the workflow package install, missing-library preflight, and successful mock startup. Real hosted API 36 boot and connected instrumentation still require Actions verification.
 
 ## 0.5.10 CI correction — API 36 emulator test fixtures
 
@@ -17,7 +17,7 @@ The last hosted run successfully assembled `:app:assembleOfflineSideloadDebug` a
 
 # Timeline Agentique
 
-**Version:** `0.5.11-phase4c-api36-adb-test-isolation-fix`
+**Version:** `0.5.12-phase4c-api36-libpulse-fix`
 
 ## 0.5.7 CI correction — app compile classpath and symbols
 
@@ -49,7 +49,7 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.11-phase4c-api36-adb-test-isolation-fix`
+**Current source version:** `0.5.12-phase4c-api36-libpulse-fix`
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
 **Package ID:** provisional `app.timeline.islamic`

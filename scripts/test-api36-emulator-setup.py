@@ -36,6 +36,15 @@ class Api36EmulatorSetupTests(unittest.TestCase):
         self.assertIn('echo "ADB=$ADB" >> "$GITHUB_ENV"', install)
         self.assertIn('"$ADB" version', install)
 
+    def test_workflow_installs_qemu_pulse_runtime_dependency(self) -> None:
+        install = section_after(
+            self.workflow,
+            "      - name: Install Linux runtime library required by Android Emulator QEMU",
+        )
+        self.assertIn("sudo apt-get update", install)
+        self.assertIn("sudo apt-get install --yes --no-install-recommends libpulse0", install)
+        self.assertIn("dpkg-query", install)
+
     def test_api36_step_uses_dedicated_startup_script(self) -> None:
         start = section_after(self.workflow, "      - name: Start API 36 emulator")
         self.assertIn("bash scripts/start-api36-emulator.sh", start)
@@ -44,6 +53,9 @@ class Api36EmulatorSetupTests(unittest.TestCase):
     def test_startup_script_uses_sdk_absolute_adb_and_emulator_paths(self) -> None:
         self.assertIn('ADB="${ADB:-${SDK_ROOT}/platform-tools/adb}"', self.starter)
         self.assertIn('EMULATOR="${SDK_ROOT}/emulator/emulator"', self.starter)
+        self.assertIn('QEMU="${SDK_ROOT}/emulator/qemu/linux-x86_64/qemu-system-x86_64"', self.starter)
+        self.assertIn('QEMU_DEPENDENCIES="$(ldd "$QEMU" 2>&1)"', self.starter)
+        self.assertIn("MISSING_QEMU_LIBRARIES", self.starter)
         self.assertIn('if [[ ! -x "$ADB" ]]', self.starter)
         self.assertIn('"$ADB" start-server', self.starter)
         self.assertIn('"$ADB" get-state', self.starter)
@@ -79,14 +91,68 @@ class Api36EmulatorSetupTests(unittest.TestCase):
         self.assertIn("platform-tools/adb", result.stderr)
         self.assertIn("install the SDK package 'platform-tools'", result.stderr)
 
+    def test_missing_qemu_shared_library_fails_before_emulator_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sdk = root / "sdk"
+            adb_dir = sdk / "platform-tools"
+            emulator_dir = sdk / "emulator"
+            qemu_dir = emulator_dir / "qemu/linux-x86_64"
+            fake_bin = root / "bin"
+            for directory in (adb_dir, qemu_dir, fake_bin):
+                directory.mkdir(parents=True, exist_ok=True)
+
+            adb = adb_dir / "adb"
+            adb.write_text("#!/bin/sh\necho adb-must-not-be-called >&2\nexit 99\n", encoding="utf-8")
+            adb.chmod(0o755)
+            qemu = qemu_dir / "qemu-system-x86_64"
+            qemu.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            qemu.chmod(0o755)
+            emulator_marker = root / "emulator-was-launched"
+            emulator = emulator_dir / "emulator"
+            emulator.write_text(
+                "#!/bin/sh\n"
+                f"touch {str(emulator_marker)!r}\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            emulator.chmod(0o755)
+            avdmanager = root / "avdmanager"
+            avdmanager.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            avdmanager.chmod(0o755)
+            ldd = fake_bin / "ldd"
+            ldd.write_text("#!/bin/sh\necho 'libpulse.so.0 => not found'\nexit 0\n", encoding="utf-8")
+            ldd.chmod(0o755)
+
+            env = os.environ.copy()
+            env["ANDROID_HOME"] = str(sdk)
+            env["AVDMANAGER"] = str(avdmanager)
+            env["ADB"] = str(adb)
+            env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+            result = subprocess.run(
+                ["bash", str(STARTER)],
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=10,
+            )
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("libpulse.so.0", result.stderr)
+        self.assertIn("apt-get install", result.stderr)
+        self.assertFalse(emulator_marker.exists(), "emulator must not launch when QEMU dependencies are missing")
+
     def test_startup_script_completes_with_mocked_sdk_tools(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             sdk = root / "sdk"
             platform_tools = sdk / "platform-tools"
             emulator_dir = sdk / "emulator"
+            qemu_dir = emulator_dir / "qemu/linux-x86_64"
             fake_bin = root / "bin"
-            for directory in (platform_tools, emulator_dir, fake_bin):
+            for directory in (platform_tools, qemu_dir, fake_bin):
                 directory.mkdir(parents=True, exist_ok=True)
 
             adb = platform_tools / "adb"
@@ -121,6 +187,15 @@ class Api36EmulatorSetupTests(unittest.TestCase):
                 encoding="utf-8",
             )
             emulator.chmod(0o755)
+            qemu = qemu_dir / "qemu-system-x86_64"
+            qemu.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            qemu.chmod(0o755)
+            ldd = fake_bin / "ldd"
+            ldd.write_text(
+                "#!/bin/sh\necho 'libpulse.so.0 => /usr/lib/x86_64-linux-gnu/libpulse.so.0 (0x0)'\nexit 0\n",
+                encoding="utf-8",
+            )
+            ldd.chmod(0o755)
 
             avdmanager = root / "avdmanager"
             avdmanager.write_text("#!/bin/sh\ncat >/dev/null\nexit 0\n", encoding="utf-8")

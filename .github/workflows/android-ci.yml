@@ -32,6 +32,11 @@ jobs:
           test -x "$AVDMANAGER"
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
           echo "AVDMANAGER=$AVDMANAGER" >> "$GITHUB_ENV"
+      - name: Install Linux runtime library required by Android Emulator QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libpulse0
+          dpkg-query -W -f='${Status}\n' libpulse0 | grep -qx 'install ok installed'
       - name: Install Android SDK platform and emulator image
         run: |
           yes | "$SDKMANAGER" --licenses >/dev/null || true

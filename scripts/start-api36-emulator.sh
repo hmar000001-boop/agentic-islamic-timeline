@@ -8,6 +8,7 @@ set -Eeuo pipefail
 SDK_ROOT="${ANDROID_HOME}"
 ADB="${ADB:-${SDK_ROOT}/platform-tools/adb}"
 EMULATOR="${SDK_ROOT}/emulator/emulator"
+QEMU="${SDK_ROOT}/emulator/qemu/linux-x86_64/qemu-system-x86_64"
 AVD_NAME="timeline-ci-api36"
 LOG_FILE="${TIMELINE_EMULATOR_LOG:-/tmp/timeline-emulator.log}"
 
@@ -42,7 +43,29 @@ if [[ ! -x "$AVDMANAGER" ]]; then
   echo "Android AVD manager is missing or not executable: $AVDMANAGER" >&2
   exit 1
 fi
+if [[ ! -x "$QEMU" ]]; then
+  echo "Android emulator QEMU executable is missing or not executable: $QEMU" >&2
+  exit 1
+fi
+if ! command -v ldd >/dev/null 2>&1; then
+  echo "Cannot validate Android emulator host libraries: ldd is unavailable on PATH." >&2
+  exit 1
+fi
+if ! QEMU_DEPENDENCIES="$(ldd "$QEMU" 2>&1)"; then
+  echo "Unable to inspect Android emulator QEMU shared-library dependencies: $QEMU" >&2
+  printf '%s\n' "$QEMU_DEPENDENCIES" >&2
+  exit 1
+fi
+MISSING_QEMU_LIBRARIES="$(printf '%s\n' "$QEMU_DEPENDENCIES" | awk '/not found/ { print $1 }' | sort -u)"
+if [[ -n "$MISSING_QEMU_LIBRARIES" ]]; then
+  echo "Android emulator QEMU is missing required Linux host shared libraries:" >&2
+  printf '  %s\n' "$MISSING_QEMU_LIBRARIES" >&2
+  echo "On Ubuntu runners, install the runtime package: sudo apt-get install --yes --no-install-recommends libpulse0" >&2
+  echo "Install the package providing every listed library, then rerun the emulator startup step." >&2
+  exit 1
+fi
 
+echo "Verified Android emulator QEMU shared-library dependencies."
 "$ADB" version
 "$EMULATOR" -version
 

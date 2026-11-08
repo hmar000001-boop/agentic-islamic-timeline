@@ -1,6 +1,10 @@
 # Timeline Agentique
 
-**Version:** `0.5.5-phase4c-embedding-index-test-fixture-fix`  
+**Version:** `0.5.6-phase4c-room-dense-index-compile-fix`
+
+## 0.5.6 CI correction — Room dense-index adapter compile contract
+
+The next hosted Gradle run passed the API 37.0 SDK verifier, AGP built-in Kotlin configuration, AAR metadata checks, all listed core/feature production compilation except `:core:persistence`, KSP startup, and the previously failing `:core:retrieval` unit tests. Compilation then exposed two errors in `RoomDenseEmbeddingIndexStore`: the expression-bodied `activateGeneration` leaked the DAO's `Int` return value despite the interface requiring `Unit`, and `vectorsFor` referenced an undeclared `STATE_ACTIVE`. The adapter now uses a block-bodied `Unit` override while keeping the complete retire/activate/delete sequence inside the same Room transaction, and defines `STATE_ACTIVE = "ACTIVE"` to match the DAO predicates. CI runs `scripts/verify-room-dense-index-contract.py`; the existing Room instrumentation test exercises activation, replacement and recovery.
 
 ## 0.5.5 CI correction — non-empty corpus-index test fixtures
 
@@ -24,10 +28,10 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.5-phase4c-embedding-index-test-fixture-fix`  
-**Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`  
-**Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`  
-**Package ID:** provisional `app.timeline.islamic`  
+**Current source version:** `0.5.6-phase4c-room-dense-index-compile-fix`
+**Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
+**Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
+**Package ID:** provisional `app.timeline.islamic`
 **Status:** incremental implementation source; not a production release.
 
 ## 0.5.1 CI correction

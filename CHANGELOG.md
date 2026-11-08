@@ -1,3 +1,12 @@
+## 0.5.6-phase4c-room-dense-index-compile-fix — 2026-11-08
+- Fixed the real GitHub Actions Kotlin compilation errors in `RoomDenseEmbeddingIndexStore`: `activateGeneration` now explicitly implements the interface's `Unit` return contract instead of leaking the integer row-count returned by the final DAO deletion call.
+- Added the missing `STATE_ACTIVE = "ACTIVE"` constant used by `vectorsFor`; the value matches the `DenseIndexDao` activation and active-generation query predicates.
+- Kept generation activation inside one `RoomDatabase.withTransaction` transaction. Retire-old → activate-staging compare-and-set → delete-retired remains atomic; no partial active generation can become visible.
+- Added `scripts/verify-room-dense-index-contract.py` and a CI step covering the API return type, adapter override, staging/active state names, DAO predicates, and transactional activation.
+- Existing `RoomDenseEmbeddingIndexStoreTest` exercises initial activation, replacement activation, active-vector visibility, retired-vector cleanup and abandoned-staging recovery.
+- A local Kotlin compile harness compiled the actual production `RoomDenseEmbeddingIndexStore.kt` against minimal Room/domain/DAO API shims. The official GitHub Actions Kotlin compile and Android Room/SQLCipher instrumentation must still be rerun; no full Android build is claimed from the local harness.
+- Bumped app versionCode to 10 and versionName to `0.5.6-phase4c-room-dense-index-compile-fix`. No database schema change or application feature behavior outside the dense-index adapter was introduced.
+
 ## 0.5.5-phase4c-embedding-index-test-fixture-fix — 2026-11-08
 - Fixed the three real GitHub Actions failures in `:core:retrieval:testDebugUnitTest` reported after API 37.0 installation and AGP/Kotlin configuration succeeded.
 - Root cause: the new `LocalEmbeddingIndexBuilder` correctly rejects missing or zero-byte SQLite index files before opening a staging generation, but three unit tests supplied `File.createTempFile(...)` files without writing any bytes. The completed-build test therefore failed before the builder ran; failure/oversized-batch tests saw `abortCount == 0` because staging had never begun.

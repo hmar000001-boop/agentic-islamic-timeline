@@ -62,15 +62,18 @@ class RoomDenseEmbeddingIndexStore(private val database: AppDatabase) : DenseEmb
         generation.encodedBytes + batchBytes
     }
 
-    override suspend fun activateGeneration(generationId: String) = database.withTransaction {
-        val incoming = dao.generation(generationId) ?: error("Dense index generation does not exist")
-        check(incoming.state == STATE_STAGING && incoming.vectorCount > 0) {
-            "Only non-empty staging generations can become active"
+    override suspend fun activateGeneration(generationId: String): Unit {
+        database.withTransaction {
+            val incoming = dao.generation(generationId) ?: error("Dense index generation does not exist")
+            check(incoming.state == STATE_STAGING && incoming.vectorCount > 0) {
+                "Only non-empty staging generations can become active"
+            }
+            dao.retireActiveGeneration(incoming.packId, incoming.packVersion, incoming.modelId, incoming.modelVersion)
+            check(dao.activateStagingGeneration(generationId) == 1) { "Dense index activation lost its compare-and-set" }
+            // Deleting the retired generation cascades to its vectors, in the same encrypted DB transaction.
+            dao.deleteRetiredGenerations(incoming.packId, incoming.packVersion, incoming.modelId, incoming.modelVersion)
+            Unit
         }
-        dao.retireActiveGeneration(incoming.packId, incoming.packVersion, incoming.modelId, incoming.modelVersion)
-        check(dao.activateStagingGeneration(generationId) == 1) { "Dense index activation lost its compare-and-set" }
-        // Deleting the retired generation cascades to its vectors, in the same encrypted DB transaction.
-        dao.deleteRetiredGenerations(incoming.packId, incoming.packVersion, incoming.modelId, incoming.modelVersion)
     }
 
     override suspend fun abortGeneration(generationId: String) {
@@ -117,6 +120,7 @@ class RoomDenseEmbeddingIndexStore(private val database: AppDatabase) : DenseEmb
 
     private companion object {
         const val STATE_STAGING = "STAGING"
+        const val STATE_ACTIVE = "ACTIVE"
         const val MIN_GENERATION_BYTES = 1_048_576L
         const val MAX_GENERATION_BYTES = 128L * 1024L * 1024L
         const val MAX_TOTAL_STORE_BYTES = 256L * 1024L * 1024L

@@ -1,3 +1,12 @@
+## 0.5.7-phase4c-app-compile-fix — 2026-11-08
+- Fixed the next real GitHub Actions app Kotlin compilation errors after `:core:persistence:compileDebugKotlin` and `:core:persistence:testDebugUnitTest` succeeded.
+- Removed the explicit `androidx.compose.foundation.layout.weight` import from `MainActivity`; `Modifier.weight` is a `ColumnScope` member extension and is resolved inside the `Column` content receiver. Importing it as a top-level extension caused Kotlin to bind to an inaccessible internal `RowColumnParentData?.weight` symbol.
+- Added the missing `core.agent.TaskLease` and `core.agent.ExecutionClaimResult` imports to `TimelineApplication`, matching their actual declarations in `core:agent-api`.
+- Changed `core:persistence` to expose `androidx.room:room-runtime` via `api(...)` rather than `implementation(...)`, because its public `AppDatabase` class extends `androidx.room.RoomDatabase` and the consuming app must see that public supertype on its compile classpath. Room KTX remains an implementation dependency.
+- Added `scripts/verify-app-module-compile-contract.py` and wired it into CI before Gradle compilation. It checks the Compose receiver import, exact agent API imports/contracts, Room runtime API exposure, and version bump.
+- No business behavior, database schema, encryption configuration, runtime target, or Phase 4 corpus trust policy changed. App versionCode is 11 and versionName is `0.5.7-phase4c-app-compile-fix`.
+- Local static contract checks are available; a fresh GitHub Actions run is still required to verify the real app compile and downstream build tasks.
+
 ## 0.5.6-phase4c-room-dense-index-compile-fix — 2026-11-08
 - Fixed the real GitHub Actions Kotlin compilation errors in `RoomDenseEmbeddingIndexStore`: `activateGeneration` now explicitly implements the interface's `Unit` return contract instead of leaking the integer row-count returned by the final DAO deletion call.
 - Added the missing `STATE_ACTIVE = "ACTIVE"` constant used by `vectorsFor`; the value matches the `DenseIndexDao` activation and active-generation query predicates.

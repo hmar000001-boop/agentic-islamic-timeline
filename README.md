@@ -1,6 +1,10 @@
 # Timeline Agentique
 
-**Version:** `0.5.6-phase4c-room-dense-index-compile-fix`
+**Version:** `0.5.7-phase4c-app-compile-fix`
+
+## 0.5.7 CI correction — app compile classpath and symbols
+
+The latest hosted build passed `:core:persistence:compileDebugKotlin`, Room KSP and persistence unit tests, then exposed app-source compile errors. `MainActivity` no longer imports the `ColumnScope`-member `weight` extension as a top-level symbol; `TimelineApplication` imports `TaskLease` and `ExecutionClaimResult` from `core.agent`; and persistence now exports Room runtime as an API dependency because the public `AppDatabase` type extends `RoomDatabase`. CI runs `scripts/verify-app-module-compile-contract.py` before Gradle. Re-run hosted app compilation to validate the fix.
 
 ## 0.5.6 CI correction — Room dense-index adapter compile contract
 
@@ -28,7 +32,7 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.6-phase4c-room-dense-index-compile-fix`
+**Current source version:** `0.5.7-phase4c-app-compile-fix`
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
 **Package ID:** provisional `app.timeline.islamic`
@@ -127,4 +131,4 @@ For initial dependency lock generation on a network-enabled host, run the CI wor
 - Project Library folder: `/Timeline_Agentique/`
 - Immutable ZIPs and SHA-256 files are versioned; do not overwrite earlier deliveries.
 - Every meaningful tranche has a new checkpoint under `docs/checkpoints/` and report under `docs/reports/`.
-- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-08_phase4c-compose-api37.md` for the next implementation.
+- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-08_phase4c-app-compile-fix.md` for the next implementation.

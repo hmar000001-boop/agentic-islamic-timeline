@@ -21,5 +21,7 @@ include(":core:agent-runtime")
 include(":core:knowledge-api")
 include(":core:corpus")
 include(":core:retrieval")
+include(":core:model-manager")
 
 include(":feature:corpus-management")
+include(":feature:model-management")

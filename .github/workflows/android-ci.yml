@@ -66,6 +66,8 @@ jobs:
         run: python3 scripts/verify-room-dense-index-contract.py
       - name: Verify persistence Android-test dependencies and fixtures
         run: python3 scripts/test-persistence-androidtest-contract.py
+      - name: Verify Phase 5A offline model manager contract
+        run: python3 scripts/test-model-manager-contract.py
       - name: Verify app compile-time module API contracts
         run: python3 scripts/verify-app-module-compile-contract.py
       - name: Test Gradle bootstrap executable permissions
@@ -85,9 +87,9 @@ jobs:
       - name: Verify Gradle distribution
         run: ./gradlew --version
       - name: Unit tests and write dependency locks
-        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :core:knowledge-api:testDebugUnitTest :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest :feature:corpus-management:testDebugUnitTest
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :core:knowledge-api:testDebugUnitTest :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest :core:model-manager:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest :feature:corpus-management:testDebugUnitTest :feature:model-management:testDebugUnitTest
       - name: Assemble and lint
-        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug :core:corpus:lint :core:retrieval:lint :feature:corpus-management:lint
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug :core:corpus:lint :core:retrieval:lint :core:model-manager:lint :feature:corpus-management:lint :feature:model-management:lint
       - name: Audit offline merged manifest
         run: |
           ./gradlew --no-daemon --no-configuration-cache --write-locks :app:processOfflineSideloadDebugMainManifest
@@ -101,7 +103,7 @@ jobs:
         run: |
           bash scripts/start-api36-emulator.sh
       - name: Instrumented Android tests
-        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:connectedOfflineSideloadDebugAndroidTest :core:persistence:connectedDebugAndroidTest :core:corpus:connectedDebugAndroidTest :core:retrieval:connectedDebugAndroidTest
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:connectedOfflineSideloadDebugAndroidTest :core:persistence:connectedDebugAndroidTest :core:corpus:connectedDebugAndroidTest :core:retrieval:connectedDebugAndroidTest :core:model-manager:connectedDebugAndroidTest
       - name: Dependency resolution report
         if: always()
         run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:dependencies --configuration offlineSideloadDebugRuntimeClasspath > dependency-report.txt

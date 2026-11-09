@@ -1,3 +1,40 @@
+# Timeline Agentique
+
+**Current source:** `0.6.0-phase5a-model-manager-saf-import` (versionCode 21)
+**Current phase:** Phase 5A — offline model inventory, verified SAF installation and device preflight.
+**Previous baseline:** Phase 0–4 implementation from 0.5.16; preserved incrementally.
+
+## Phase 5A — implemented foundation
+
+- Added an on-device Model Manager backed by the existing SQLCipher Room `installed_model` table; no database schema migration was required.
+- Added three immutable, digest-pinned LiteRT-LM catalog entries: Gemma 4 E2B IT, Gemma 4 E4B IT and EmbeddingGemma 2 Text 270M. Each catalog item fixes the repository, immutable revision, exact artifact filename, exact byte length, SHA-256 and Apache-2.0 license identifier.
+- Added a user-initiated Android Storage Access Framework (`content://`) importer. It streams into a `.partial` file, enforces the exact maximum and final byte count, computes SHA-256 incrementally, fsyncs the file, then renames the verified artifact into app-private storage.
+- Model files live under `noBackupFilesDir/on-device-models`; model paths are derived only from catalog identifiers and revisions, never from provider-supplied filenames. Metadata is in SQLCipher Room; weight files are app-private sandbox files excluded from backup but are not individually SQLCipher-encrypted in Phase 5A. No model URL is fetched by the app, no URI permission is retained, and no network permission was added.
+- Added lifecycle states `INSTALLING`, `INSTALLED`, `QUARANTINED` and `REMOVAL_PENDING`, compare-and-set Room transitions, interrupted-install/removal recovery, tamper detection and quarantine. Failed deletion keeps `REMOVAL_PENDING` until every model-owned file is gone; recovery cannot delete the registry row ahead of bytes. Model removal does not touch corpus packs, SQLCipher user data or dense-index generations.
+- Added device preflight measurements for total/available RAM, Android low-memory status, process PSS, available private storage, memory class and thermal status. These are resource estimates only: preflight never reports a model as loaded or runtime-ready.
+- Added the Models screen and Arabic/English resources. A file imported and hash-verified is explicitly labelled as **not active** until real LiteRT-LM initialization and an on-device load test succeed. If inventory cannot be read, the UI shows an unknown state and does not offer another import.
+- The timeline and FTS5 lexical retrieval remain available without any installed model. No new app runtime requirement depends on Phase 5.
+
+## Phase 5B — next implementation tranche
+
+- Pin and integrate a stable Android LiteRT-LM runtime dependency and native runtime set.
+- Implement a generator adapter and manual tool-call handling; autonomous tool calling stays disabled so the existing authorization gateway remains the only route to side effects.
+- Implement an EmbeddingGemma 2 adapter, confirm the actual output dimension/task prefixes through runtime metadata and test vectors, then connect it to the existing encrypted dense-index builder. FTS5 remains the guaranteed fallback.
+- Run real load/inference/embedding benchmarks on the Galaxy S24 FE, including memory, thermal, latency, model unload and repeated initialization. Do not infer compatibility from the phone's advertised RAM alone.
+- Add offline OCR and speech foundations after their model/runtime dependencies, licenses and resource profiles are pinned.
+
+## Validation boundaries
+
+Phase 4 CI is green according to the user's latest GitHub Actions run for 0.5.16. Phase 5A has passed local source-contract checks and a standalone Kotlin compilation/execution harness (28/28 ModelManager tests plus 3/3 file-store instrumentation methods executed with Android API shims). This workspace does not have the Android SDK, Gradle 9.5.0 distribution or repository access needed to run the official Android Gradle build, KSP/Room generation, Gradle unit-test task, Compose lint or connected instrumentation. The new Phase 5A Gradle tasks (including `:core:model-manager:connectedDebugAndroidTest`) and the app-level module integration must therefore be confirmed by the next GitHub Actions run. Real SAF-provider behavior and Galaxy S24 FE storage/memory/thermal measurements also remain device validation. No LiteRT-LM engine is wired in 0.6.0, no generator or embedding inference is active, and the existing dense-index builder is not enabled by a real model provider. Revision update/rollback orchestration is deferred. The application is not production-ready.
+
+## Existing product and security constraints
+
+- Android-native Kotlin/Compose application; offline-first; no mandatory cloud inference, backend, accounts, telemetry, advertising, in-app purchases or subscriptions.
+- Arabic and English launch resources; Sunni scope across the four madhhabs with no default madhhab.
+- Corpus evidence remains source-first and subject to licensing, scholarly review, provenance and publisher trust gates.
+- State-changing agent actions remain subject to the existing authorization gateway and explicit approval policy.
+- `minSdk 26`, `targetSdk 36`, compile SDK 37.0, Java 17 bytecode and API 36 emulator CI remain unchanged.
+
 ## 0.5.16 CI correction — revoked scoped-grant recovery assertions
 
 The 0.5.15 run compiled and packaged every instrumentation target, booted the API 36 AVD, and executed all test suites. Only `AgentAuthorizationRoomTest.revokedScopedGrantIsRecheckedAtExecutorStart` failed: its first recovery call expected `0`, then the same unchanged claim was expected to remain `CLAIMED` so a second recovery call could return `1`. The recovery implementation intentionally aborts `CLAIMED` executions on the first process-startup pass because no external handler has run before the atomic `EXECUTING` transition. The test is corrected to expect exactly one abort followed by an idempotent zero. It now exercises `ToolExecutionGateway` and proves the fake external handler is never invoked after grant revocation, the execution/outbox never become `EXECUTING`, no executor-start audit/task event is written, and recovery aborts the claim, interrupts the task, expires the lease and is idempotent. Production authorization/recovery behavior is unchanged.
@@ -63,13 +100,13 @@ Android SDK Platform 37 is published by the SDK Manager as `platforms;android-37
 
 ## 0.5.2 CI correction — Compose API 37
 
-The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artifacts require `compileSdk 37`. All 15 Android modules now compile against API 37.0. The app's `targetSdk` remains 36 and CI keeps the API 36 emulator for runtime compatibility tests; compile SDK and target SDK serve different purposes. CI installs Android SDK Platforms 36 and 37.0.
+The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artifacts require `compileSdk 37`. All 17 Android modules now compile against API 37.0. The app's `targetSdk` remains 36 and CI keeps the API 36 emulator for runtime compatibility tests; compile SDK and target SDK serve different purposes. CI installs Android SDK Platforms 36 and 37.0.
 
 `python3 scripts/verify-compose-compile-sdk.py` checks this split and is executed by GitHub Actions.
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`
+**Historical Phase 4 baseline:** `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
 **Package ID:** provisional `app.timeline.islamic`
@@ -84,7 +121,7 @@ The authoring environment still has no installed Gradle distribution or Android 
 ## What is in this source archive
 
 - The original Android application and all prior Timeline, Canvas, task runtime, authorization, encrypted persistence, corpus, publisher-trust and retrieval work are preserved. This is not a replacement project.
-- Fifteen Gradle modules: `app`; `core:common`, `core:timeline-api`, `core:agent-api`, `core:authorization`, `core:agent-runtime`, `core:security`, `core:localization`, `core:persistence`, `core:knowledge-api`, `core:corpus`, `core:retrieval`; `feature:timeline`, `feature:canvas`, and `feature:corpus-management`.
+- Seventeen Gradle modules: `app`; twelve core modules (`common`, `timeline-api`, `agent-api`, `authorization`, `agent-runtime`, `security`, `localization`, `persistence`, `knowledge-api`, `corpus`, `retrieval`, `model-manager`); and four feature modules (`timeline`, `canvas`, `corpus-management`, `model-management`).
 - Android min API 26, compile API 37 / target API 36, Java 17 bytecode target. Offline sideload and Play-distribution flavors both currently have no INTERNET permission; Play AI Delivery is not integrated.
 - SQLCipher-protected Room schema v5 with 27 registered entities and explicit migrations 1→2→3→4→5. Keystore-wrapped random database key, fail-closed recovery, no plaintext fallback.
 - Existing daily Timeline, task/habit entry and completion, Canvas create/edit/archive/snapshots, Arabic/English resource sets and RTL-capable layouts.
@@ -93,7 +130,7 @@ The authoring environment still has no installed Gradle distribution or Android 
 - Phase 4B root-signed publisher keyring, monotonic encrypted Room persistence, SAF import/update, pack lifecycle, startup revalidation, quarantine/restore, removal recovery and path/symlink protections.
 - Phase 4C corpus-management screen connected to Timeline app navigation; user-driven SAF selection for keyring and packs; signed keyring/pack lifecycle operations; explicit update/removal confirmation; status visibility and startup revalidation.
 - Phase 4C bounded local embedding-index construction contract. It streams installed passages in small batches, quantizes normalized vectors to int8, stages and atomically publishes generations, and stores vectors only inside the SQLCipher-protected Room database. Per-generation payload is capped at 128 MiB; total active/staging vector payload is capped at 256 MiB. Inactive/quarantined/superseded packs have their dense generations removed.
-- Dense retrieval remains disabled until a separately reviewed, compatible on-device embedding model is installed and registered. There is no fake embedder, no fabricated vector model, no embedded model weights and no remote embedding provider. FTS5 remains the functioning retrieval path.
+- Phase 5A model management lists three immutable LiteRT-LM artifacts and supports user-selected SAF import, but imports do not activate inference. Dense retrieval remains disabled until a separately reviewed on-device embedding runtime is integrated and validated. There is no fake embedder, fabricated vector model, bundled model weights or remote embedding provider. FTS5 remains the functioning retrieval path.
 
 ## Toolchain and AGP 9+ migration
 
@@ -138,7 +175,7 @@ Local checks for this tranche include the AGP built-in Kotlin migration tests, p
 
 - No production publisher root public key is pinned. The app intentionally disables publisher trust operations until the operator supplies a reviewed root key via controlled build properties. No publisher private key, placeholder root key or corpus data is included.
 - No signed, rights-cleared, scholarly-reviewed Qur'an/hadith/tafsir/fiqh corpus pack is included. Corpus rights, provenance, exact editions/translations, and scholarly governance remain mandatory release gates.
-- No concrete embedding model/runtime adapter or model weights are included. Phase 4C provides the streaming index builder and encrypted storage only; model acquisition/validation and on-device inference belong to Phase 5.
+- No LiteRT-LM runtime, generator adapter, embedding inference adapter or model weights are bundled. Phase 5A supports manual installation of pinned model files only. Model initialization, vector dimensions/task-prefix verification, actual inference, embedding-index activation and Galaxy S24 FE benchmarks remain Phase 5B.
 - No dense ranking is used when a model is absent. Dense retrieval must remain subordinate to hard source eligibility, licensing, review, language, madhhab and citation checks.
 - Phase 2 remains a first functional slice: recurring habits, calendar integration, notification scheduling, history UI, full Canvas step editing/attachments/undo, prayer-time calculation cards and other listed roadmap functions are not complete.
 - Phase 3 does not yet register production OS tool adapters, a model-driven AgentStepProcessor or WorkManager scheduler. No external action is currently registered by the application.
@@ -156,6 +193,7 @@ Local checks for this tranche include the AGP built-in Kotlin migration tests, p
 ./gradlew :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest
 ./gradlew :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest
 ./gradlew :feature:corpus-management:testDebugUnitTest
+./gradlew :core:model-manager:testDebugUnitTest
 ./gradlew :app:lintOfflineSideloadDebug
 ./gradlew :app:connectedOfflineSideloadDebugAndroidTest
 ./gradlew :core:persistence:connectedDebugAndroidTest
@@ -168,4 +206,4 @@ For initial dependency lock generation on a network-enabled host, run the CI wor
 - Project Library folder: `/Timeline_Agentique/`
 - Immutable ZIPs and SHA-256 files are versioned; do not overwrite earlier deliveries.
 - Every meaningful tranche has a new checkpoint under `docs/checkpoints/` and report under `docs/reports/`.
-- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-08_phase4c-api36-headless-qemu-preflight-fix.md` for the next implementation.
+- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-09_phase5a-model-manager.md` for Phase 5B planning and implementation.

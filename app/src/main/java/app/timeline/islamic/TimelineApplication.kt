@@ -36,11 +36,21 @@ import app.timeline.islamic.core.persistence.RoomPublisherKeyringStore
 import app.timeline.islamic.core.persistence.RoomDenseEmbeddingIndexStore
 import app.timeline.islamic.core.retrieval.BundledSqliteCorpusIndex
 import app.timeline.islamic.core.retrieval.LocalEmbeddingIndexBuilder
+import app.timeline.islamic.core.models.AndroidDeviceResourceProbe
+import app.timeline.islamic.core.models.AndroidModelFileStore
+import app.timeline.islamic.core.models.ModelCatalog
+import app.timeline.islamic.core.models.ModelManager
+import app.timeline.islamic.core.models.ModelPreflightDecision
+import app.timeline.islamic.core.models.RoomModelRegistry
+import app.timeline.islamic.core.models.SafModelArtifactImporter
+import app.timeline.islamic.feature.models.ModelManagementUiState
+import app.timeline.islamic.feature.models.ModelUiItem
 import app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord
 import app.timeline.islamic.core.knowledge.LocalTextEmbeddingModel
 import java.io.File
 import app.timeline.islamic.feature.corpus.CorpusManagementUiState
 import app.timeline.islamic.feature.corpus.CorpusPackUiItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -99,6 +109,16 @@ class TimelineApplication : Application() {
     /** Embeddings are derived text data and therefore stay inside the SQLCipher Room database. */
     private val denseEmbeddingIndexStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         RoomDenseEmbeddingIndexStore(database)
+    }
+    // Model artifacts are stored only under noBackupFilesDir and their metadata remains in SQLCipher Room.
+    private val modelManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        ModelManager(RoomModelRegistry(database), AndroidModelFileStore(noBackupFilesDir))
+    }
+    private val safModelImporter by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        SafModelArtifactImporter(this, modelManager)
+    }
+    private val modelResourceProbe by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        AndroidDeviceResourceProbe(this)
     }
     private val corpusInstaller by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         CorpusPackInstaller(this, corpusKeyring, corpusSignatureVerifier, corpusIndex, corpusRegistry)
@@ -260,5 +280,55 @@ class TimelineApplication : Application() {
         val indexFile = File(File(filesDir, "corpus-packs"), record.relativeIndexPath)
         return LocalEmbeddingIndexBuilder(corpusIndex, denseEmbeddingIndexStore).build(record, indexFile, model)
     }
+
+
+    /** Model inventory failure is distinct from an empty inventory; UI must fail closed. */
+    suspend fun loadModelManagementState(): ModelManagementUiState {
+        return try {
+            modelManager.recover()
+            val installed = modelManager.installedModels().associateBy { it.modelId to it.revision }
+            val items = ModelCatalog.all().map { spec ->
+                val row = installed[spec.id to spec.revision]
+                ModelUiItem(
+                    id = spec.id,
+                    displayName = spec.displayName,
+                    description = spec.description,
+                    descriptionArabic = spec.descriptionArabic,
+                    task = spec.task,
+                    expectedBytes = spec.expectedBytes,
+                    licenseId = spec.licenseId,
+                    minimumRamBytes = spec.minimumDeviceRamBytes,
+                    status = row?.status
+                )
+            }
+            ModelManagementUiState(loading = false, busy = false, inventoryReadable = true, items = items)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            ModelManagementUiState(
+                loading = false,
+                busy = false,
+                inventoryReadable = false,
+                items = emptyList(),
+                message = failure::class.simpleName ?: "MODEL_INVENTORY_UNAVAILABLE"
+            )
+        }
+    }
+
+    suspend fun importModelArtifact(uri: Uri, modelId: String) {
+        val preflight = modelManager.preflight(modelId, modelResourceProbe.snapshot())
+        check(preflight.decision != ModelPreflightDecision.BLOCKED_STORAGE) {
+            "Insufficient private storage for the selected model and required reserve"
+        }
+        // RAM and thermal results describe runtime suitability, not whether file import is allowed.
+        safModelImporter.import(uri, modelId)
+    }
+
+    suspend fun removeModelArtifact(modelId: String) {
+        check(modelManager.remove(modelId)) { "Model removal did not complete; its recovery state was retained" }
+    }
+
+    suspend fun preflightModel(modelId: String): ModelPreflightDecision =
+        modelManager.preflight(modelId, modelResourceProbe.snapshot()).decision
 
 }

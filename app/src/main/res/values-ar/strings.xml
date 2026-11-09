@@ -5,4 +5,5 @@
     <string name="app_nav_timeline">الخط الزمني</string>
     <string name="app_nav_canvas">مساحة العمل</string>
     <string name="app_nav_corpus">المعرفة</string>
+    <string name="app_nav_models">النماذج</string>
 </resources>

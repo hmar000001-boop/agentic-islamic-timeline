@@ -132,7 +132,18 @@ import kotlinx.coroutines.flow.Flow
     @Query("UPDATE installed_corpus_pack SET status = 'SUPERSEDED' WHERE packId = :packId AND version = :version AND status = 'INSTALLED'") suspend fun supersedeCorpusPack(packId: String, version: String): Int
     @Query("DELETE FROM installed_corpus_pack WHERE id = :id AND status = 'REMOVAL_PENDING'") suspend fun deleteCorpusPack(id: String): Int
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putModel(model: InstalledModelEntity)
+    @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertModel(model: InstalledModelEntity)
+    @Query("SELECT * FROM installed_model WHERE modelId = :modelId AND version = :version LIMIT 1")
+    suspend fun model(modelId: String, version: String): InstalledModelEntity?
+    @Query("SELECT * FROM installed_model WHERE id = :id LIMIT 1")
+    suspend fun modelById(id: String): InstalledModelEntity?
     @Query("SELECT * FROM installed_model ORDER BY installedAtEpochMillis DESC") suspend fun models(): List<InstalledModelEntity>
+    @Query("UPDATE installed_model SET status = 'QUARANTINED' WHERE status NOT IN ('INSTALLING', 'INSTALLED', 'QUARANTINED', 'REMOVAL_PENDING')")
+    suspend fun quarantineUnknownModelStatuses(): Int
+    @Query("UPDATE installed_model SET status = :newStatus WHERE id = :id AND status = :expectedStatus")
+    suspend fun transitionModelStatus(id: String, expectedStatus: String, newStatus: String): Int
+    @Query("DELETE FROM installed_model WHERE id = :id AND status = 'REMOVAL_PENDING'")
+    suspend fun deleteModelAfterRemoval(id: String): Int
 }
 
 

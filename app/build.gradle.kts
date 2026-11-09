@@ -17,8 +17,8 @@ extensions.configure<ApplicationExtension>("android") {
         applicationId = "app.timeline.islamic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 20
-        versionName = "0.5.16-phase4c-revoked-grant-reconciliation-test-fix"
+        versionCode = 21
+        versionName = "0.6.0-phase5a-model-manager-saf-import"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     flavorDimensions += "distribution"
@@ -72,6 +72,8 @@ dependencies {
     implementation(project(":feature:timeline"))
     implementation(project(":feature:canvas"))
     implementation(project(":feature:corpus-management"))
+    implementation(project(":core:model-manager"))
+    implementation(project(":feature:model-management"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)

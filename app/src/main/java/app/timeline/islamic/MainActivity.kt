@@ -29,16 +29,20 @@ import app.timeline.islamic.feature.canvas.CanvasFeature
 import app.timeline.islamic.feature.corpus.CorpusManagementFeature
 import app.timeline.islamic.feature.corpus.CorpusManagementUiState
 import app.timeline.islamic.feature.corpus.CorpusPackUiItem
+import app.timeline.islamic.feature.models.ModelManagementFeature
+import app.timeline.islamic.feature.models.ModelManagementUiState
 import app.timeline.islamic.feature.timeline.TimelineFeature
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class AppDestination { TIMELINE, CANVAS, CORPUS }
+private enum class AppDestination { TIMELINE, CANVAS, CORPUS, MODELS }
 
 class MainActivity : ComponentActivity() {
     private var corpusState by mutableStateOf(CorpusManagementUiState())
+    private var modelState by mutableStateOf(ModelManagementUiState())
     private var pendingPackUpdateTarget: CorpusPackUiItem? = null
+    private var pendingModelImportId: String? = null
 
     private val openPublisherKeyring = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) performCorpusAction { importPublisherKeyring(uri) }
@@ -53,8 +57,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val openModelArtifact = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val modelId = pendingModelImportId
+        pendingModelImportId = null
+        if (uri != null && modelId != null) performModelAction { importModelArtifact(uri, modelId) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingModelImportId = savedInstanceState?.getString(STATE_PENDING_MODEL_IMPORT_ID)
         enableEdgeToEdge()
         val timelineApplication = application as TimelineApplication
         val databaseResult = runCatching { timelineApplication.database }
@@ -96,6 +107,17 @@ class MainActivity : ComponentActivity() {
                                             performCorpusAction { removeCorpusPack(pack.packId, pack.version) }
                                         }
                                     )
+                                    AppDestination.MODELS -> ModelManagementFeature(
+                                        state = modelState,
+                                        onBack = { destination = AppDestination.TIMELINE },
+                                        onRefresh = ::refreshModelScreen,
+                                        onImport = { modelId ->
+                                            pendingModelImportId = modelId
+                                            openModelArtifact.launch(ALL_DOCUMENT_TYPES)
+                                        },
+                                        onRemove = { modelId -> performModelAction { removeModelArtifact(modelId) } },
+                                        onPreflight = ::performModelPreflight
+                                    )
                                 }
                             }
                             NavigationBar {
@@ -116,6 +138,15 @@ class MainActivity : ComponentActivity() {
                                     onClick = { destination = AppDestination.CORPUS },
                                     icon = { Text("3") },
                                     label = { Text(stringResource(R.string.app_nav_corpus)) }
+                                )
+                                NavigationBarItem(
+                                    selected = destination == AppDestination.MODELS,
+                                    onClick = {
+                                        destination = AppDestination.MODELS
+                                        refreshModelScreen()
+                                    },
+                                    icon = { Text("4") },
+                                    label = { Text(stringResource(R.string.app_nav_models)) }
                                 )
                             }
                         }
@@ -153,7 +184,53 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun refreshModelScreen() {
+        modelState = modelState.copy(loading = true, message = null)
+        val app = application as TimelineApplication
+        lifecycleScope.launch {
+            modelState = withContext(Dispatchers.IO) { app.loadModelManagementState() }
+        }
+    }
+
+    private fun performModelAction(action: suspend TimelineApplication.() -> Unit) {
+        val app = application as TimelineApplication
+        modelState = modelState.copy(busy = true, message = null)
+        lifecycleScope.launch {
+            val result = runCatching { withContext(Dispatchers.IO) { app.action() } }
+            val refreshed = runCatching { withContext(Dispatchers.IO) { app.loadModelManagementState() } }
+            modelState = refreshed.getOrElse {
+                modelState.copy(loading = false, busy = false, inventoryReadable = false)
+            }.copy(
+                busy = false,
+                message = result.exceptionOrNull()?.let { "Operation failed: ${it::class.simpleName ?: "UNKNOWN"}" }
+                    ?: refreshed.exceptionOrNull()?.let { "Refresh failed: ${it::class.simpleName ?: "UNKNOWN"}" }
+            )
+        }
+    }
+
+    private fun performModelPreflight(modelId: String) {
+        val app = application as TimelineApplication
+        modelState = modelState.copy(busy = true, message = null)
+        lifecycleScope.launch {
+            val result = runCatching { withContext(Dispatchers.IO) { app.preflightModel(modelId) } }
+            modelState = modelState.copy(
+                busy = false,
+                message = result.exceptionOrNull()?.let { "Preflight failed: ${it::class.simpleName ?: "UNKNOWN"}" },
+                items = modelState.items.map { item ->
+                    if (item.id == modelId) item.copy(preflightDecision = result.getOrNull()) else item
+                }
+            )
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_PENDING_MODEL_IMPORT_ID, pendingModelImportId)
+        super.onSaveInstanceState(outState)
+    }
+
     private companion object {
+        const val STATE_PENDING_MODEL_IMPORT_ID = "pending_model_import_id"
         val ZIP_MIME_TYPES = arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")
+        val ALL_DOCUMENT_TYPES = arrayOf("*/*")
     }
 }

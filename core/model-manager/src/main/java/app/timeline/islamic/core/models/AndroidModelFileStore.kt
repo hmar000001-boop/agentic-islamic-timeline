@@ -212,8 +212,38 @@ class AndroidModelFileStore(noBackupFilesDir: File) : ModelFileStore {
     }
 
     private fun syncDirectory(directory: File) {
-        val descriptor = Os.open(directory.absolutePath, OsConstants.O_RDONLY or OsConstants.O_DIRECTORY, 0)
-        try { Os.fsync(descriptor) } finally { Os.close(descriptor) }
+        // O_DIRECTORY exists in POSIX/Linux but is not part of Android's public
+        // OsConstants SDK surface. Open with the public O_RDONLY flag, then verify
+        // both the path and the opened descriptor are the same real directory before
+        // fsync. Keep the unresolved absolute path so lstat (rather than stat) can
+        // reject a symlink at the directory path instead of silently resolving it.
+        require(directory.isDirectory && !Files.isSymbolicLink(directory.toPath())) {
+            "Model storage sync target is not a safe directory: ${directory.absolutePath}"
+        }
+        val path = directory.absolutePath
+        val beforeOpen = Os.lstat(path)
+        check(OsConstants.S_ISDIR(beforeOpen.st_mode)) {
+            "Model storage sync target is not a directory: $path"
+        }
+
+        val descriptor = Os.open(path, OsConstants.O_RDONLY, 0)
+        try {
+            val opened = Os.fstat(descriptor)
+            check(OsConstants.S_ISDIR(opened.st_mode)) {
+                "Opened model storage sync target is not a directory: $path"
+            }
+            val currentPath = Os.lstat(path)
+            check(
+                OsConstants.S_ISDIR(currentPath.st_mode) &&
+                    currentPath.st_dev == opened.st_dev &&
+                    currentPath.st_ino == opened.st_ino
+            ) {
+                "Model storage directory changed while opening it: $path"
+            }
+            Os.fsync(descriptor)
+        } finally {
+            Os.close(descriptor)
+        }
     }
 
     companion object { const val ROOT_DIRECTORY_NAME = "on-device-models" }

@@ -1,8 +1,23 @@
 # Timeline Agentique
 
-**Current source:** `0.6.1-phase5b-litertlm-runtime` (versionCode 22)
-**Current phase:** Phase 5B — pinned LiteRT-LM CPU runtime and EmbeddingGemma adapters; hosted validation pending.
+**Current source:** `0.6.2-phase5c-dense-retrieval` (versionCode 23)
+**Current phase:** Phase 5C — fingerprinted local dense retrieval integrated with encrypted Room vectors and FTS5/RRF fallback; hosted/device validation pending.
 **Previous baseline:** Phase 0–4 implementation from 0.5.16; preserved incrementally.
+
+### 0.6.2 CI hotfix — Android directory fsync API
+
+The first hosted Phase 5C unit-test build reached `:core:model-manager:compileDebugKotlin` and failed because `OsConstants.O_DIRECTORY` is not exported by Android's public SDK. The directory-sync code now opens with public `O_RDONLY`, verifies the directory path and opened descriptor with `lstat`/`fstat` and `S_ISDIR`, checks device/inode identity, then retains `fsync` and guaranteed close. A separate CI contract rejects hidden constants and missing durability checks. See `docs/reports/PHASE5C_CI_HOTFIX_ANDROID_DIRECTORY_SYNC_2026-11-09.md`.
+
+## Phase 5C — local dense retrieval (0.6.2)
+
+- Connects the verified LiteRT-LM EmbeddingGemma 2 query adapter to the existing SQLCipher Room dense-index store and `LocalCorpusRetriever`; FTS5/RRF remains active and is not removed or replaced.
+- Dense generations are bound to the exact corpus manifest SHA-256, model artifact SHA-256, model revision, output dimension and an explicit embedding preprocessing profile. A model/hash match alone is insufficient.
+- Room schema is now v6 (27 entities). Migration 5→6 adds the corpus-manifest and embedding-profile columns and invalidates all v5 dense generations/vectors because they lack those compatibility fingerprints. Signed corpus packs, FTS5 tables, authorization, user data and publisher trust state are preserved.
+- Index building reads only currently cleared, unexpired, reviewed corpus passages and stores only quantized vectors plus stable evidence keys in encrypted Room. The vector rows contain no source text.
+- Query scanning is exact cosine over stable-key ordered pages (2,048 vectors/page) with a bounded top-k heap. It reads lightweight metadata while scoring and loads original citation-bearing source text only for the final top-k; hashes, normalizer output, pack identity, language and madhhab are rechecked before return.
+- Dense search is available only when the exact installed EmbeddingGemma artifact and an ACTIVE generation match all fingerprints. No model, no compatible generation or any dense integrity/runtime failure leaves FTS5/RRF available. RRF remains a ranking utility, not a confidence/probability score.
+- Query embeddings are normalized once before vector scanning; only cleared, approved, in-date sources are scored. Out-of-scope language/madhhab rows and currently ineligible sources are skipped, while malformed/missing provenance fails the dense channel closed.
+- CI includes a Phase 5C source/SQLite migration contract and existing retrieval unit and Room connected instrumentation tasks. This environment executed the actual retrieval Kotlin sources/tests with a local harness (23/23); hosted Android Gradle/KSP/SQLCipher instrumentation and Galaxy S24 FE benchmarks still remain required.
 
 ## Phase 5B — LiteRT-LM runtime (0.6.1)
 
@@ -32,19 +47,23 @@
 - Gemma 4 E2B/E4B load through the CPU backend only, with a 4-thread owner dispatcher, 4,096-token KV cache, bounded prompt/output, per-request conversation and explicit cancellation/unload. No tool provider is registered and automatic tool calling remains disabled.
 - EmbeddingGemma 2 implements the Phase 4 `LocalTextEmbeddingModel` contract with LiteRT-LM's asymmetric search-result/search-query prefixes, max batch 24, requested normalized 768-d vectors and strict finite/dimension/norm checks.
 - `TimelineApplication` exposes explicit model loading, smoke test, unload, dense-index construction and one-off query embedding service methods. Generation and embedding are serialized so two multi-GB model engines are not resident together.
-- FTS5/RRF remains the active retrieval path. Building a dense index does not automatically route search through vectors; golden-vector parity and device query testing are still required.
+- In the 0.6.1 Phase 5B baseline, FTS5/RRF was the only active retrieval route. Phase 5C (0.6.2) now adds an optional, fingerprint-checked dense channel; FTS5 continues to run and remains the fallback.
 - Phase 5B CI now includes inference unit tests, API-shape instrumentation, lint and static checks, but this authoring environment cannot execute the real Gradle/Android SDK/native runtime build. The first hosted CI run for 0.6.1 and an actual Galaxy S24 FE model-load/performance run are still required.
 
-## Phase 5C — next
+## Phase 5D — next
 
-- Validate the 0.6.1 Android build and native initialization on hosted API 36 and the Galaxy S24 FE, including E2B and EmbeddingGemma; determine whether E4B is practical on target RAM/thermal budgets.
-- Add golden embedding vectors and verify Arabic/English search quality and index/query model fingerprints before any query-time dense routing.
+- Validate the Phase 5B native runtime and Phase 5C query/index path on hosted API 36 and the Galaxy S24 FE, including E2B and EmbeddingGemma; determine whether E4B is practical under sustained RAM/thermal budgets.
+- Add upstream/model-revision-specific golden embedding vectors and evaluate Arabic/English retrieval quality, hybrid RRF ranking and latency using licensed/approved evaluation corpora.
 - Integrate generation into the agent proposal pipeline as a text-only component that cannot execute tools or commit state changes; preserve evidence provenance and explicit user approval.
-- Add offline OCR and speech only after the runtime, model, licence and device resource profiles are pinned.
+- Add offline OCR and speech only after runtime, model, license and device resource profiles are pinned.
+
+## Phase 5C — implemented dense retrieval integration; hosted/device validation pending
+
+Phase 5C connects the real 768-dimensional local EmbeddingGemma query adapter to `LocalDenseIndexSearcher`, which reads active vectors from encrypted Room in bounded stable-key pages, computes exact cosine similarity, resolves source metadata from the installed signed SQLite pack and loads original source text only for top-k results. Dense results flow through the existing independent-channel RRF fusion with FTS5. The v5→v6 Room migration adds mandatory corpus-manifest and embedding-profile fingerprints and deletes only legacy derived vector data that cannot be proven compatible. The app's `retrieveCorpus()` service uses dense search only for an exact installed model plus matching active generation; any absence/error falls back to lexical retrieval. The authoring environment ran the actual retrieval Kotlin unit sources in a local harness (23/23) and static/SQLite migration contracts, but could not run the Android Gradle/KSP build or actual SQLCipher/Android connected tests. Do not claim API 36 or Galaxy S24 FE runtime validation for 0.6.2 until GitHub Actions and device tests pass.
 
 ## Validation boundaries
 
-Phase 4 CI was reported green by the user on 2026-11-09 for the 0.5.16 baseline. Phase 5A (0.6.0) adds the offline Model Manager, closed pinned catalog, SAF import, durable ownership markers and recovery. Phase 5B (0.6.1) adds the pinned LiteRT-LM 0.19.1 Android dependency, a CPU-only generation adapter, a text-only EmbeddingGemma adapter and explicit Models-screen load/smoke-test/unload controls. The generator registers no tools and disables automatic tool calling; application actions remain behind the existing `ToolExecutionGateway`. The embedding adapter implements the existing 768-dimensional `LocalTextEmbeddingModel` contract, but query/RAG routing is not silently switched: FTS5/RRF remains the active fallback until golden-vector and device validation pass. This authoring environment has no Android SDK, KVM emulator or resolvable Gradle 9.5.0 distribution, so the actual Android Gradle/KSP/Compose build, native LiteRT-LM model initialization and hosted instrumentation still require GitHub Actions and Galaxy S24 FE validation. The model files are stored in app-private no-backup storage but are not individually SQLCipher-encrypted. OCR/audio runtimes, generation integration into agent orchestration, query-time dense-index routing and device performance measurements remain open. The application is not production-ready.
+Phase 4 CI was reported green by the user on 2026-11-09 for the 0.5.16 baseline. Phase 5A (0.6.0) adds the offline Model Manager, pinned catalog, SAF import, durable ownership markers and recovery. Phase 5B (0.6.1) adds pinned LiteRT-LM 0.19.1 CPU generation and EmbeddingGemma adapters; the generator exposes no tools and cannot bypass `ToolExecutionGateway`. Phase 5C (0.6.2) connects query embeddings to fingerprinted dense retrieval inside SQLCipher Room, using exact cosine search and FTS5/RRF fallback. The v5→v6 migration drops only legacy derived vectors whose corpus/model/preprocessing fingerprints were not recorded. This authoring environment ran 23 retrieval unit tests with the actual retrieval Kotlin source plus static and SQLite migration contracts, but has no Android SDK/KVM emulator and cannot run Gradle 9.5.0/AGP/KSP/Compose or real SQLCipher Android instrumentation. Phase 5B native AAR/model initialization, Phase 5C connected database migration/query, and Galaxy S24 FE RAM/thermal/latency validation still require GitHub Actions and device testing. Model weight files remain in app-private no-backup storage and are not individually SQLCipher-encrypted. OCR/audio, agent proposal-generation wiring and production corpus rights/scholarly approvals remain open. The application is not production-ready.
 
 ## Existing product and security constraints
 
@@ -180,7 +199,7 @@ KGP 2.4.21 is pinned through the root buildscript classpath because this build u
 
 The authoring workspace has JDK 21 and Kotlin compiler 1.9.0, but **no installed Gradle distribution or Android SDK**. The container cannot resolve Gradle/Maven repositories. Therefore a real Android Gradle build, KSP/Room generation, AndroidX/SQLCipher runtime tests, API 36 emulator tests and Galaxy S24 FE tests have **not** been run here. Do not treat local static checks as a passing Android build.
 
-Local checks for this tranche include the AGP built-in Kotlin migration tests, public-DSL/version-policy guards, Room v5 migration/schema/SQLite smoke guard, Gradle bootstrap regression, offline manifest and XML checks, secret scan, source inventories and archive/checksum integrity. Their exact results and limitations are in `docs/reports/PHASE4C_AND_CI_MIGRATION_REPORT_2026-11-08.md`.
+Local checks for this tranche include the AGP built-in Kotlin migration tests, public-DSL/version-policy guards, Room v6 migration/schema/SQLite smoke guard, Gradle bootstrap regression, offline manifest and XML checks, secret scan, source inventories and archive/checksum integrity. Their exact results and limitations are in `docs/reports/PHASE4C_AND_CI_MIGRATION_REPORT_2026-11-08.md`.
 
 ## Database and key recovery policy
 
@@ -226,4 +245,4 @@ For initial dependency lock generation on a network-enabled host, run the CI wor
 - Project Library folder: `/Timeline_Agentique/`
 - Immutable ZIPs and SHA-256 files are versioned; do not overwrite earlier deliveries.
 - Every meaningful tranche has a new checkpoint under `docs/checkpoints/` and report under `docs/reports/`.
-- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-09_phase5b-litertlm-runtime.md` for Phase 5B validation and continuation.
+- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-09_phase5c-dense-retrieval.md` for Phase 5C validation and Phase 5D continuation.

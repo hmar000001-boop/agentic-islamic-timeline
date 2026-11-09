@@ -10,6 +10,7 @@ dependencies {
     implementation(project(":core:agent-api"))
     implementation(project(":core:knowledge-api"))
     implementation(project(":core:security"))
+    implementation(project(":core:domain-api"))
     // AppDatabase publicly extends RoomDatabase; expose the supertype on consumer compile classpaths.
     api(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

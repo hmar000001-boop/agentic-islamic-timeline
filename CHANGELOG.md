@@ -1,3 +1,18 @@
+## 0.7.0-phase6-domain-engines — 2026-11-09
+
+- Continued incrementally from the recovered 0.6.3 Phase 5C source candidate; added seven separate deterministic offline domain libraries and a bilingual Compose domain hub reachable from the app navigation. App versionCode is 25; no new network permission or service is introduced.
+- Added `:core:domain-api` with a bounded deterministic payload codec, defensive byte handling, SHA-256 integrity validation and versioned domain workspace records.
+- Added Room schema v7 (28 entities) and additive migration 6→7 for the `domain_workspace` table and indexes. Draft data remains inside the existing SQLCipher database. Repository supports read/list, compare-and-set revision updates, hash verification and revision-guarded deletion. A real KSP `7.json` snapshot is intentionally not fabricated and remains a hosted build acceptance gate.
+- Prayer: explicit custom profile inputs, solar event calculation, named high-latitude fallback policy, and elapsed-instant night duration across DST. No calculation authority is selected by default and no prayer-validity ruling is produced.
+- Hifz: exact user-entered Mushaf/verse references and user-rated SM-2 spaced review. The UI does not resolve the reference against an installed verified Mushaf, generate Quran text, process audio or grade tajwid.
+- Travel: one manually entered/imported route segment, strict IANA zone resolution, rejects DST gaps and requires explicit offset for overlaps, plus Qibla bearing. Qasr/jamʿ stays unavailable without a trusted reviewed madhhab-specific ruleset.
+- Halal: captures ingredient uncertainty and reported certification metadata, including validity interval and a clearly labelled user scope-match claim. Supplied values are not independent proof; engine never returns halal/haram verdict.
+- Zakat: bounded integer arithmetic preview over currently exposed cash and short-term liabilities, manually entered nisab/rate/haul duration and valuation date. Even below-user-threshold and incomplete-haul outcomes remain unverified previews; no scholarly rule pack or other asset-class workflows are installed.
+- Inheritance: jurisdiction, explicit madhhab, family/estate intake and confirmed provisional arithmetic only. All potentially relevant heir categories must be described/attested; no shares or distribution solver is enabled.
+- Community: strict versioned local snapshot import. The source-captured timestamp is explicit in the header and separate from import time; stale-age policy is user-entered. No live directory, chat, presence or remote notification feature is included.
+- Added pure-Kotlin tests across the new domain modules and SQLCipher Room CRUD/hash/CAS plus v6→v7 migration instrumentation source. Local custom test runner and static regression checks pass; these are not actual Gradle/Room Android test executions.
+- **Validation pending:** actual Gradle/AGP/Kotlin/Compose/KSP build; generated Room v7 schema review; SQLCipher/Room API 36 instrumentation; Compose RTL/accessibility/device QA; real prayer-method comparison; Quran/Mushaf reference resolution; scholarly-approved halal/Zakat/inheritance/travel rule packs; source verification and community data rights. No release or production certification is claimed.
+
 ## 0.6.3-phase5c-dense-retrieval — 2026-11-09
 
 - Completed the Phase 5C source implementation on the recovered 0.6.2 baseline; incremented app versionCode to 24.

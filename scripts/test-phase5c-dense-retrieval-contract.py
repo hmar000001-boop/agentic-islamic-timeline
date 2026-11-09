@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 5C end-to-end source contract: Room v6 fingerprints, exhaustive dense scan, RRF and app wiring."""
+"""Phase 5C end-to-end source contract: Room v7 fingerprints, exhaustive dense scan, RRF and app wiring."""
 from pathlib import Path
 import re
 import sys
@@ -31,7 +31,7 @@ app = read("app/src/main/java/app/timeline/islamic/TimelineApplication.kt")
 embedding = read("core/inference-runtime/src/main/java/app/timeline/islamic/core/inference/LiteRtEmbeddingTextModel.kt")
 workflow = read(".github/workflows/android-ci.yml")
 
-require(re.search(r"version\s*=\s*6", app_db) is not None, "Room schema version is 6")
+require(re.search(r"version\s*=\s*7", app_db) is not None, "Room schema version is 7 after additive Phase 6 workspace migration")
 require("MIGRATION_5_6" in migrations and "AppDatabaseMigrations.MIGRATION_5_6" in factory,
         "Room factory registers v5→v6 migration")
 require('ALTER TABLE dense_index_generation ADD COLUMN corpusManifestSha256 TEXT NOT NULL DEFAULT \'\'' in migrations and
@@ -123,16 +123,16 @@ require("onBuildDenseIndex" in feature and "onSearch" in feature and "state.keyr
 require("embedQuery(text: String)" in api and "override suspend fun embedQuery" in embedding and
         "QUERY_PREFIX" in embedding and "DOCUMENT_PREFIX" in embedding,
         "query embeddings use the model's distinct asymmetric query prefix")
-require('versionCode = 24' in read("app/build.gradle.kts") and
-        'versionName = "0.6.3-phase5c-dense-retrieval"' in read("app/build.gradle.kts"),
-        "Phase 5C completion candidate has incremented release identity 0.6.3 / 24")
+require('versionCode = 25' in read("app/build.gradle.kts") and
+        'versionName = "0.7.0-phase6-domain-engines"' in read("app/build.gradle.kts"),
+        "Phase 6 source release identity is 0.7.0 / 25")
 require("scripts/test-phase5c-dense-retrieval-contract.py" in workflow and
         "scripts/test-phase5c-readbatch-sql.py" in workflow and
-        "scripts/verify-room-schema-export.py" in workflow and
+        "scripts/verify-room-schema-export.py" in workflow and "scripts/verify-phase6-domain-workspace.py" in workflow and
         ":core:retrieval:testDebugUnitTest" in workflow and
         ":core:persistence:connectedDebugAndroidTest" in workflow and
         ":core:retrieval:connectedDebugAndroidTest" in workflow,
-        "CI contains dense retrieval contract, JVM tests, SQLCipher migration/store and bundled-SQLite instrumentation")
+        "CI contains dense retrieval contract, JVM tests, SQLCipher migration/store, bundled-SQLite instrumentation and Phase 6 domain contracts")
 
 unit_test = ROOT / "core/retrieval/src/test/java/app/timeline/islamic/core/retrieval/StoredDenseIndexRetrieverTest.kt"
 room_migration_test = ROOT / "core/persistence/src/androidTest/java/app/timeline/islamic/core/persistence/RoomDenseEmbeddingIndexMigrationTest.kt"
@@ -150,4 +150,4 @@ if errors:
     for error in errors:
         print(f" - {error}", file=sys.stderr)
     raise SystemExit(1)
-print(f"All {checks} Phase 5C dense retrieval, Room v6, fingerprint, migration, RRF, app-wiring and CI source contracts passed.")
+print(f"All {checks} Phase 5C dense retrieval, Room v7, fingerprint, migration, RRF, app-wiring and CI source contracts passed.")

@@ -36,8 +36,8 @@ require('implementation(project(":core:model-manager"))' in app_gradle and 'impl
 for path, source in (("core/model-manager", model_gradle), ("feature/model-management", feature_gradle)):
     require("release(37)" in source and "minorApiLevel = 0" in source and "minSdk = 26" in source,
             f"{path} targets compileSdk 37.0 and minSdk 26")
-require('versionCode = 24' in app_gradle and 'versionName = "0.6.3-phase5c-dense-retrieval"' in app_gradle,
-        "app version is 0.6.3 versionCode 24 while preserving the Phase 5A module")
+require('versionCode = 25' in app_gradle and 'versionName = "0.7.0-phase6-domain-engines"' in app_gradle,
+        "app version is 0.7.0 versionCode 25 while preserving the Phase 5A module")
 
 for model_id in ("gemma-4-e2b-it", "gemma-4-e4b-it", "embeddinggemma-2-text-270m"):
     require(f'id = "{model_id}"' in catalog, f"pinned catalog entry exists for {model_id}")
@@ -106,8 +106,8 @@ require("runtime not active" in (ROOT / "feature/model-management/src/main/res/v
         "UI labels verified model files as inactive until a real runtime load test")
 require("quarantineUnknownModelStatuses" in dao and "dao.quarantineUnknownModelStatuses()" in registry,
         "unknown persisted lifecycle states are normalized to quarantine")
-require("version = 6" in database and "InstalledModelEntity::class" in database,
-        "current Room v6 retains the Phase 5A installed_model entity")
+require("version = 7" in database and "InstalledModelEntity::class" in database,
+        "current Room v7 retains the Phase 5A installed_model entity")
 require(":core:model-manager:testDebugUnitTest" in workflow and "scripts/test-model-manager-contract.py" in workflow,
         "CI executes both the model manager unit tests and the independent Phase 5A contract script")
 require(":core:model-manager:connectedDebugAndroidTest" in workflow and
@@ -159,4 +159,4 @@ if errors:
     for error in errors:
         print(f" - {error}", file=sys.stderr)
     raise SystemExit(1)
-print("Model Manager regression contract passed: pinned catalog, closed SAF import, bounded hashing, atomic private install, Room v6 lifecycle, recovery, preflight, localized UI, offline manifest and CI coverage.")
+print("Model Manager regression contract passed: pinned catalog, closed SAF import, bounded hashing, atomic private install, Room v7 lifecycle, recovery, preflight, localized UI, offline manifest and CI coverage.")

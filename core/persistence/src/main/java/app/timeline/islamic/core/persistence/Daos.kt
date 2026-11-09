@@ -201,3 +201,20 @@ import kotlinx.coroutines.flow.Flow
     @Query("DELETE FROM dense_index_generation WHERE packId = :packId AND packVersion = :packVersion")
     suspend fun deletePackGenerations(packId: String, packVersion: String): Int
 }
+
+@Dao interface DomainWorkspaceDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(record: DomainWorkspaceEntity)
+
+    @Query("SELECT * FROM domain_workspace WHERE id = :id LIMIT 1")
+    suspend fun get(id: String): DomainWorkspaceEntity?
+
+    @Query("SELECT * FROM domain_workspace WHERE domain = :domain ORDER BY updatedAtEpochMillis DESC, id COLLATE BINARY ASC LIMIT :limit")
+    suspend fun list(domain: String, limit: Int): List<DomainWorkspaceEntity>
+
+    @Query("UPDATE domain_workspace SET status = :status, payload = :payload, payloadSha256 = :payloadSha256, revision = revision + 1, updatedAtEpochMillis = :now WHERE id = :id AND revision = :expectedRevision")
+    suspend fun updateIfRevisionMatches(id: String, expectedRevision: Long, status: String, payload: ByteArray, payloadSha256: String, now: Long): Int
+
+    @Query("DELETE FROM domain_workspace WHERE id = :id AND revision = :expectedRevision")
+    suspend fun deleteIfRevisionMatches(id: String, expectedRevision: Long): Int
+}

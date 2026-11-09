@@ -328,3 +328,17 @@ data class DenseIndexVectorEntity(
     val stableEvidenceKey: String,
     val vector: ByteArray
 )
+
+/** User-owned domain drafts are stored only in the SQLCipher Room database. */
+@Entity(tableName = "domain_workspace", indices = [Index(value = ["domain", "updatedAtEpochMillis"]), Index("status")])
+data class DomainWorkspaceEntity(
+    @PrimaryKey val id: String,
+    val domain: String,
+    val schemaVersion: Int,
+    val revision: Long,
+    val status: String,
+    val payload: ByteArray,
+    val payloadSha256: String,
+    val createdAtEpochMillis: Long,
+    val updatedAtEpochMillis: Long
+)

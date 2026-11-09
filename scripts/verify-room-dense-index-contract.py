@@ -51,9 +51,9 @@ checks.append((
     "Generation activation remains one Room transaction"
 ))
 checks.append((
-    re.search(r"version\s*=\s*6", db) is not None and
+    re.search(r"version\s*=\s*7", db) is not None and
     "corpusManifestSha256" in entity and "embeddingProfileSha256" in entity,
-    "Room v6 binds index generations to signed corpus and embedding profile fingerprints"
+    "Room v7 binds index generations to signed corpus and embedding profile fingerprints"
 ))
 checks.append((
     "corpusManifestSha256 = pack.manifestSha256" in store and

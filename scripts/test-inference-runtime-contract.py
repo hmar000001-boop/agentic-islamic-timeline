@@ -111,9 +111,9 @@ for label, needle in [
     require(needle in workflow, f"CI includes inference-runtime {label}")
 require("scripts/test-inference-runtime-contract.py" in workflow,
         "CI executes the Phase 5B static source contract")
-require('versionCode = 24' in app_gradle and
-        'versionName = "0.6.3-phase5c-dense-retrieval"' in app_gradle,
-        "application release identity is 0.6.3 versionCode 24")
+require('versionCode = 25' in app_gradle and
+        'versionName = "0.7.0-phase6-domain-engines"' in app_gradle,
+        "application release identity is 0.7.0 versionCode 25")
 
 unit_tests = ROOT / "core/inference-runtime/src/test/java/app/timeline/islamic/core/inference/InferenceRuntimePolicyTest.kt"
 android_tests = ROOT / "core/inference-runtime/src/androidTest/java/app/timeline/islamic/core/inference/LiteRtApiContractTest.kt"

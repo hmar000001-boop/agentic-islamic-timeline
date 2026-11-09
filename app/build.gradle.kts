@@ -17,8 +17,8 @@ extensions.configure<ApplicationExtension>("android") {
         applicationId = "app.timeline.islamic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 24
-        versionName = "0.6.3-phase5c-dense-retrieval"
+        versionCode = 25
+        versionName = "0.7.0-phase6-domain-engines"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     flavorDimensions += "distribution"
@@ -67,6 +67,7 @@ dependencies {
     implementation(project(":core:security"))
     implementation(project(":core:localization"))
     implementation(project(":core:persistence"))
+    implementation(project(":core:domain-api"))
     implementation(project(":core:corpus"))
     implementation(project(":core:retrieval"))
     implementation(project(":feature:timeline"))
@@ -75,6 +76,7 @@ dependencies {
     implementation(project(":core:model-manager"))
     implementation(project(":core:inference-runtime"))
     implementation(project(":feature:model-management"))
+    implementation(project(":feature:domain-hub"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)

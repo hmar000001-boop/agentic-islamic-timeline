@@ -26,3 +26,14 @@ include(":core:inference-runtime")
 
 include(":feature:corpus-management")
 include(":feature:model-management")
+
+include(":core:domain-api")
+
+include(":feature:prayer")
+include(":feature:hifz")
+include(":feature:travel")
+include(":feature:halal")
+include(":feature:zakat")
+include(":feature:inheritance")
+include(":feature:community-local")
+include(":feature:domain-hub")

@@ -35,11 +35,12 @@ import app.timeline.islamic.core.knowledge.RetrievalRequest
 import app.timeline.islamic.feature.models.ModelManagementFeature
 import app.timeline.islamic.feature.models.ModelManagementUiState
 import app.timeline.islamic.feature.timeline.TimelineFeature
+import app.timeline.islamic.feature.domainhub.DomainHubFeature
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class AppDestination { TIMELINE, CANVAS, CORPUS, MODELS }
+private enum class AppDestination { TIMELINE, CANVAS, CORPUS, MODELS, DOMAINS }
 
 class MainActivity : ComponentActivity() {
     private var corpusState by mutableStateOf(CorpusManagementUiState())
@@ -131,6 +132,10 @@ class MainActivity : ComponentActivity() {
                                         onRunSmokeTest = { performModelAction { runGenerationSmokeTest(); Unit } },
                                         onUnloadGeneration = { performModelAction { unloadGenerationModel() } }
                                     )
+                                    AppDestination.DOMAINS -> DomainHubFeature(
+                                        repository = timelineApplication.domainWorkspaceRepository,
+                                        onBack = { destination = AppDestination.TIMELINE }
+                                    )
                                 }
                             }
                             NavigationBar {
@@ -160,6 +165,12 @@ class MainActivity : ComponentActivity() {
                                     },
                                     icon = { Text("4") },
                                     label = { Text(stringResource(R.string.app_nav_models)) }
+                                )
+                                NavigationBarItem(
+                                    selected = destination == AppDestination.DOMAINS,
+                                    onClick = { destination = AppDestination.DOMAINS },
+                                    icon = { Text("5") },
+                                    label = { Text(stringResource(R.string.app_nav_domains)) }
                                 )
                             }
                         }

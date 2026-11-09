@@ -60,12 +60,16 @@ jobs:
           python3 scripts/verify-string-translations.py
       - name: Scan source for common secret patterns
         run: python3 scripts/secret-scan.py
-      - name: Validate Room v6 and encrypted dense-index migrations
+      - name: Validate Room v7, encrypted dense-index and domain-workspace migrations
         run: python3 scripts/check-phase4-schema.py
-      - name: Verify Phase 5C fingerprinted dense retrieval and Room v6 migration
+      - name: Verify Phase 5C fingerprinted dense retrieval on Room v7
         run: python3 scripts/test-phase5c-dense-retrieval-contract.py
       - name: Execute Phase 5C dense indexing source SQL contract
         run: python3 scripts/test-phase5c-readbatch-sql.py
+      - name: Verify Phase 6 domain engines and encrypted workspace contracts
+        run: python3 scripts/verify-phase6-domain-workspace.py
+      - name: Verify Phase 6 deterministic domain-engine safety contracts
+        run: python3 scripts/test-phase6-domain-engines.py
       - name: Verify Room dense-index persistence contract
         run: python3 scripts/verify-room-dense-index-contract.py
       - name: Verify persistence Android-test dependencies and fixtures
@@ -95,10 +99,10 @@ jobs:
       - name: Verify Gradle distribution
         run: ./gradlew --version
       - name: Unit tests and write dependency locks
-        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :core:knowledge-api:testDebugUnitTest :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest :core:model-manager:testDebugUnitTest :core:inference-runtime:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest :feature:corpus-management:testDebugUnitTest :feature:model-management:testDebugUnitTest
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :core:knowledge-api:testDebugUnitTest :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest :core:model-manager:testDebugUnitTest :core:inference-runtime:testDebugUnitTest :core:domain-api:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest :feature:corpus-management:testDebugUnitTest :feature:model-management:testDebugUnitTest :feature:prayer:testDebugUnitTest :feature:hifz:testDebugUnitTest :feature:travel:testDebugUnitTest :feature:halal:testDebugUnitTest :feature:zakat:testDebugUnitTest :feature:inheritance:testDebugUnitTest :feature:community-local:testDebugUnitTest
       - name: Assemble and lint
-        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug :core:corpus:lint :core:retrieval:lint :core:model-manager:lint :core:inference-runtime:lint :feature:corpus-management:lint :feature:model-management:lint
-      - name: Verify generated Room v6 schema snapshot
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug :core:corpus:lint :core:retrieval:lint :core:model-manager:lint :core:inference-runtime:lint :core:domain-api:lint :feature:corpus-management:lint :feature:model-management:lint :feature:prayer:lint :feature:hifz:lint :feature:travel:lint :feature:halal:lint :feature:zakat:lint :feature:inheritance:lint :feature:community-local:lint :feature:domain-hub:lint
+      - name: Verify generated Room v7 schema snapshot
         run: python3 scripts/verify-room-schema-export.py
       - name: Audit offline merged manifest
         run: |

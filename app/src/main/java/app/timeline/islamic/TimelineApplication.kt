@@ -35,6 +35,7 @@ import app.timeline.islamic.core.corpus.SignedPublisherKeyringArchiveImporter
 import app.timeline.islamic.core.persistence.RoomCorpusPackRegistry
 import app.timeline.islamic.core.persistence.RoomPublisherKeyringStore
 import app.timeline.islamic.core.persistence.RoomDenseEmbeddingIndexStore
+import app.timeline.islamic.core.persistence.RoomDomainWorkspaceRepository
 import app.timeline.islamic.core.retrieval.BundledSqliteCorpusIndex
 import app.timeline.islamic.core.retrieval.LocalEmbeddingIndexBuilder
 import app.timeline.islamic.core.retrieval.LocalCorpusRetriever
@@ -76,6 +77,7 @@ class TimelineApplication : Application() {
 
     // Lazy access keeps UI startup independent from a model; storage errors remain explicit.
     val database by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { EncryptedDatabaseFactory.get(this) }
+    val domainWorkspaceRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { RoomDomainWorkspaceRepository(database) }
     private val taskStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { RoomAgentTaskStore(database) }
     private val authorizationStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { RoomAuthorizationStore(database, KeystoreAuditMacProvider(this)) }
     private val authorizationEngine by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { AuthorizationEngine(authorizationStore) }

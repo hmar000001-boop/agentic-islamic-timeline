@@ -48,4 +48,14 @@ object AppDatabaseMigrations {
             database.execSQL("DELETE FROM dense_index_generation")
         }
     }
+
+    /** Phase 6 stores versioned user-owned domain drafts inside SQLCipher-protected Room. */
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("CREATE TABLE IF NOT EXISTS domain_workspace (id TEXT NOT NULL PRIMARY KEY, domain TEXT NOT NULL, schemaVersion INTEGER NOT NULL, revision INTEGER NOT NULL, status TEXT NOT NULL, payload BLOB NOT NULL, payloadSha256 TEXT NOT NULL, createdAtEpochMillis INTEGER NOT NULL, updatedAtEpochMillis INTEGER NOT NULL)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_domain_workspace_domain_updatedAtEpochMillis ON domain_workspace(domain, updatedAtEpochMillis)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_domain_workspace_status ON domain_workspace(status)")
+        }
+    }
+
 }

@@ -1,7 +1,7 @@
 # Timeline Agentique
 
-**Current source:** `0.6.3-phase5c-dense-retrieval` (versionCode 24)
-**Current phase:** Phase 5C implementation candidate complete in source; hosted Android CI, SQLCipher instrumentation and Galaxy S24 FE acceptance remain open. Phase 6 is next after these Phase 5C acceptance gates.
+**Current source:** `0.7.0-phase6-domain-engines` (versionCode 25)
+**Current phase:** Phase 6 domain-engine foundation implemented in source; actual Gradle/KSP build, SQLCipher/API 36 instrumentation, user-device testing and scholarly rule-pack acceptance remain open. Phase 5C hosted/device acceptance is also pending from version 0.6.3.
 **Previous baseline:** Phase 0–4 implementation from 0.5.16; preserved incrementally.
 
 ### 0.6.2 CI hotfix — Android directory fsync API
@@ -12,7 +12,7 @@ The first hosted Phase 5C unit-test build reached `:core:model-manager:compileDe
 
 - Connects the verified LiteRT-LM EmbeddingGemma 2 query adapter to the existing SQLCipher Room dense-index store and `LocalCorpusRetriever`; FTS5/RRF remains active and is not removed or replaced.
 - Dense generations are bound to the exact corpus manifest SHA-256, model artifact SHA-256, model revision, output dimension and an explicit embedding preprocessing profile. A model/hash match alone is insufficient.
-- Room schema is now v6 (27 entities). Migration 5→6 adds the corpus-manifest and embedding-profile columns and invalidates all v5 dense generations/vectors because they lack those compatibility fingerprints. Signed corpus packs, FTS5 tables, authorization, user data and publisher trust state are preserved.
+- Room schema is now v6 (27 entities) in the Phase 5C baseline; Phase 6 advances it to v7 (28 entities). Migration 5→6 adds the corpus-manifest and embedding-profile columns and invalidates all v5 dense generations/vectors because they lack those compatibility fingerprints. Signed corpus packs, FTS5 tables, authorization, user data and publisher trust state are preserved.
 - Index building reads only currently cleared, unexpired, reviewed corpus passages within the model's pre-prefix character budget. Before embedding, the SQLite source rechecks each passage's stable evidence identity, original-text SHA-256 and canonical normalized text; it stores only quantized vectors plus stable evidence keys in encrypted Room. The vector rows contain no source text.
 - Query scanning is exact cosine over stable-key ordered pages (2,048 vectors/page) with a bounded top-k heap. It reads only eligible stable keys while scoring and loads original citation-bearing source text only for the final top-k; hashes, normalizer output, pack identity, language and madhhab are rechecked before return.
 - Dense search is available only when the exact installed EmbeddingGemma artifact and an ACTIVE generation match all fingerprints. No model, no compatible generation or any dense integrity/runtime failure leaves FTS5/RRF available. RRF remains a ranking utility, not a confidence/probability score.
@@ -20,6 +20,21 @@ The first hosted Phase 5C unit-test build reached `:core:model-manager:compileDe
 - The corpus screen exposes explicit per-pack dense-index build/rebuild and local evidence search, displaying original source passage, locator, edition, language, contributing channels and a clearly non-probabilistic RRF ranking score. Search is disabled until a verified publisher keyring is ready.
 - Dense search respects generation runtime lifecycle and RAM/storage/thermal preflight. It never silently unloads a user-loaded generation model; lexical FTS5 remains available when dense inference is blocked.
 - A standalone Kotlin/JVM harness compiled the production retrieval and index-builder sources and executed 18 focused unit tests (18/18). A separate harness compiled the production EmbeddingGemma adapter against API-shaped LiteRT-LM stubs and passed 11/11 inference policy tests. Static Phase 5C source contracts pass 33/33; Room migration/schema guard and persistence contracts pass 12/12. These checks do not substitute for Gradle/KSP/Compose, real SQLCipher or API 36 connected tests.
+
+
+## Phase 6 — deterministic Islamic domain engines (0.7.0)
+
+- Adds seven separate offline domain libraries: Prayer, Hifz, Travel/Qibla, Halal evidence, Zakat arithmetic, Inheritance intake and Community snapshot import. Their engines are deterministic Kotlin; no model is used as a religious authority.
+- Adds `:core:domain-api` and encrypted SQLCipher Room `domain_workspace` drafts. Drafts use a bounded deterministic payload codec, SHA-256 integrity, revision compare-and-set updates and explicit deletion. Room advances to v7 (28 entities) with additive migration 6→7.
+- Prayer calculations require explicit coordinates, IANA timezone, twilight angles, Asr factor and high-latitude policy; the supplied profile is custom and has not been independently validated against a named calculation authority. High-latitude night fractions use elapsed instants across DST transitions.
+- Hifz uses stable verse/edition references and user-rated spaced review. It does not provide Quran text, voice recognition or tajwid grading. References are not resolved against an installed verified Mushaf in this tranche.
+- Travel supports an explicit route segment with timezone/DST-safe local-time resolution and Qibla bearing. Qasr/jam' guidance remains unavailable without an independently reviewed madhhab-specific ruleset.
+- Halal collects ingredient and certification evidence but never returns a halal/haram verdict. User-submitted certificate metadata is not independent source verification.
+- Zakat currently exposes a cash/liability arithmetic preview with manually entered valuation, nisab, rate and haul dates/duration. Other asset classes and reviewed madhhab-specific rules are not implemented. Even below-threshold and not-yet-complete-haul outcomes remain an explicitly unreviewed arithmetic preview, not a religious status.
+- Inheritance captures jurisdiction, explicit madhhab and family/estate facts, and permits only a confirmed provisional arithmetic remainder. No shares or distribution solver is enabled; the user must describe and attest to all potentially relevant heir categories, including those not represented by dedicated fields. A reviewed rule set is still absent.
+- Community imports versioned local event snapshots with provenance/freshness checks. The `TL-COMMUNITY-V1` header carries a source-claimed capture timestamp separately from import time; the user chooses the age threshold for stale status. Source names/references and timestamps are user-supplied metadata, not cryptographic authentication or proof of event accuracy. This is not a live directory, presence service, messaging or remote notification system.
+- A bilingual Compose domain hub is wired into app navigation. Some result details remain technical English; Arabic/English resource completeness and Compose compilation must be verified in CI.
+- Local pure-Kotlin compilation, custom harness and test-shaped JVM runner results are recorded in the Phase 6 report. They are not a substitute for Gradle/AGP/KSP, SQLCipher/Room instrumented tests or device validation. No `7.json` Room schema snapshot is fabricated; CI must generate and validate it using KSP.
 
 ## Phase 5B — LiteRT-LM runtime (0.6.1)
 
@@ -54,9 +69,10 @@ The first hosted Phase 5C unit-test build reached `:core:model-manager:compileDe
 
 ## Next development stages
 
-- Phase 6 follows Phase 5C after hosted CI and device acceptance. It will implement the user-visible Islamic domain engines (prayer, Hifz, halal, zakat, inheritance, travel and community) on top of evidence-first retrieval, with scholarly and corpus eligibility checks.
-- After Phase 6, a dedicated completion pass will revisit every earlier phase against its original acceptance criteria, close the remaining authorization, workflow, accessibility, localization, resilience and validation gaps, and only then begin Phase 7 release hardening.
-- Earlier Phase 5D ideas (agent proposal-generation wiring, optional OCR/audio and model quality evaluation) remain separate follow-up work; they are not silently represented as complete by Phase 5C.
+- Phase 6 is the current 0.7.0 implementation tranche. Phase 5C hosted/device acceptance is tracked separately and must be closed with the user's CI/device results; it does not block incremental Phase 6 source development.
+- Once the Phase 6 foundation is reviewed in GitHub Actions, implement remaining domain scope and use the user's CI feedback to correct actual compiler, KSP and instrumentation findings.
+- Then perform the requested global completion pass across Phases 1–6 against their original acceptance criteria, including authorization, workflows, accessibility, localization, resilience, data rights, security and device validation. Start Phase 7 only after that gap-closure pass.
+- Earlier Phase 5D ideas (agent proposal-generation wiring, optional OCR/audio and model quality evaluation) remain separate follow-up work; they are not silently represented as complete by Phase 5C or Phase 6.
 
 ## Phase 5C implementation and acceptance boundary
 

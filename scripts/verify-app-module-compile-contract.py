@@ -41,11 +41,12 @@ checks = [
      "AppDatabase public RoomDatabase supertype is explicit"),
     ('implementation(project(":core:persistence"))' in app_gradle,
      "app consumes the persistence module through its declared project dependency"),
-    ("versionCode = 21" in app_gradle and 'versionName = "0.6.0-phase5a-model-manager-saf-import"' in app_gradle,
-     "application version is bumped for Phase 5A model manager and SAF import foundation"),
+    ("versionCode = 22" in app_gradle and 'versionName = "0.6.1-phase5b-litertlm-runtime"' in app_gradle,
+     "application version is bumped for Phase 5B LiteRT-LM runtime integration"),
     ('implementation(project(":core:model-manager"))' in app_gradle and
-     'implementation(project(":feature:model-management"))' in app_gradle,
-     "app integrates both the model manager core and Models feature modules"),
+     'implementation(project(":feature:model-management"))' in app_gradle and
+     'implementation(project(":core:inference-runtime"))' in app_gradle,
+     "app integrates model manager, Models feature and isolated inference runtime modules"),
 ]
 
 failed = 0

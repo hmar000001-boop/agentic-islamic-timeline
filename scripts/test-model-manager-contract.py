@@ -36,8 +36,8 @@ require('implementation(project(":core:model-manager"))' in app_gradle and 'impl
 for path, source in (("core/model-manager", model_gradle), ("feature/model-management", feature_gradle)):
     require("release(37)" in source and "minorApiLevel = 0" in source and "minSdk = 26" in source,
             f"{path} targets compileSdk 37.0 and minSdk 26")
-require('versionCode = 21' in app_gradle and 'versionName = "0.6.0-phase5a-model-manager-saf-import"' in app_gradle,
-        "app version is 0.6.0 versionCode 21")
+require('versionCode = 22' in app_gradle and 'versionName = "0.6.1-phase5b-litertlm-runtime"' in app_gradle,
+        "app version is 0.6.1 versionCode 22 while preserving the Phase 5A module")
 
 for model_id in ("gemma-4-e2b-it", "gemma-4-e4b-it", "embeddinggemma-2-text-270m"):
     require(f'id = "{model_id}"' in catalog, f"pinned catalog entry exists for {model_id}")

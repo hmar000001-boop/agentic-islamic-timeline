@@ -116,7 +116,10 @@ class MainActivity : ComponentActivity() {
                                             openModelArtifact.launch(ALL_DOCUMENT_TYPES)
                                         },
                                         onRemove = { modelId -> performModelAction { removeModelArtifact(modelId) } },
-                                        onPreflight = ::performModelPreflight
+                                        onPreflight = ::performModelPreflight,
+                                        onLoadGeneration = { modelId -> performModelAction { loadGenerationModel(modelId) } },
+                                        onRunSmokeTest = { performModelAction { runGenerationSmokeTest(); Unit } },
+                                        onUnloadGeneration = { performModelAction { unloadGenerationModel() } }
                                     )
                                 }
                             }

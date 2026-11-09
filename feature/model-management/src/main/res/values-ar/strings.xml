@@ -21,4 +21,13 @@
     <string name="models_preflight_storage">المساحة الخاصة غير كافية لحجم النموذج واحتياطي المساحة الحرة المطلوب.</string>
     <string name="models_preflight_thermal">درجة حرارة الجهاز مرتفعة. أعد المحاولة بعد أن يبرد.</string>
     <string name="models_preflight_runtime_probe">اجتازت تقديرات الموارد الفحص. ما زال اختبار تحميل LiteRT-LM الفعلي مطلوبًا؛ الاستدلال غير نشط.</string>
+    <string name="models_runtime_unloaded">محرك التوليد غير محمّل.</string>
+    <string name="models_runtime_loading">جارٍ تحميل النموذج المحلي على وحدة المعالجة المركزية…</string>
+    <string name="models_runtime_ready">محرك التوليد المحلي جاهز (CPU).</string>
+    <string name="models_runtime_generating">جارٍ التوليد محليًا…</string>
+    <string name="models_runtime_failed">تعذر تشغيل المحرك المحلي: %1$s</string>
+    <string name="models_runtime_smoke_result">نتيجة اختبار المحرك المؤقتة (لا يتم حفظها):</string>
+    <string name="models_runtime_load_cpu">تحميل على CPU</string>
+    <string name="models_runtime_test">اختبار محلي</string>
+    <string name="models_runtime_unload">إلغاء التحميل</string>
 </resources>

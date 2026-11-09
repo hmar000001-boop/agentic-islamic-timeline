@@ -31,8 +31,8 @@ for path in android_modules:
         errors.append(
             f"{path.relative_to(ROOT)} must configure compileSdk with release(37) {{ minorApiLevel = 0 }}"
         )
-if seen != 17:
-    errors.append(f"Expected 17 Android modules with explicit compileSdk, found {seen}")
+if seen != 18:
+    errors.append(f"Expected 18 Android modules with explicit compileSdk, found {seen}")
 
 app = (ROOT / "app/build.gradle.kts").read_text(encoding="utf-8")
 if not re.search(r"\btargetSdk\s*=\s*36\b", app):
@@ -54,6 +54,6 @@ if errors:
         print(f" - {error}", file=sys.stderr)
     sys.exit(1)
 print(
-    "Compose/API compile SDK guard passed: all 17 Android modules select API 37.0, "
+    "Compose/API compile SDK guard passed: all 18 Android modules select API 37.0, "
     "CI installs and verifies platforms;android-37.0, targetSdk and the emulator stay at API 36."
 )

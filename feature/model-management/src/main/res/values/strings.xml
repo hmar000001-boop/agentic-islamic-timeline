@@ -21,4 +21,13 @@
     <string name="models_preflight_storage">There is not enough private storage for the model plus the required free-space reserve.</string>
     <string name="models_preflight_thermal">The device is thermally constrained. Retry after it cools down.</string>
     <string name="models_preflight_runtime_probe">Resource estimates passed. A real LiteRT-LM load test is still required; inference is not active.</string>
+    <string name="models_runtime_unloaded">Generation runtime is unloaded.</string>
+    <string name="models_runtime_loading">Loading local model on CPU…</string>
+    <string name="models_runtime_ready">Local generation runtime ready (CPU).</string>
+    <string name="models_runtime_generating">Generating locally…</string>
+    <string name="models_runtime_failed">Local runtime failed: %1$s</string>
+    <string name="models_runtime_smoke_result">Ephemeral smoke-test output (not saved):</string>
+    <string name="models_runtime_load_cpu">Load on CPU</string>
+    <string name="models_runtime_test">Run local test</string>
+    <string name="models_runtime_unload">Unload</string>
 </resources>

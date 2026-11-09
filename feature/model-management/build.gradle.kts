@@ -16,6 +16,7 @@ extensions.configure<LibraryExtension>("android") {
 
 dependencies {
     implementation(project(":core:model-manager"))
+    implementation(project(":core:inference-runtime"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.foundation)

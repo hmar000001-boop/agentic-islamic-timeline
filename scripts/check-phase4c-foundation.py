@@ -57,15 +57,23 @@ for manifest in ROOT.glob("app/src/**/AndroidManifest.xml"):
 instrumented = ROOT / "core/persistence/src/androidTest/java/app/timeline/islamic/core/persistence/RoomDenseEmbeddingIndexStoreTest.kt"
 require(instrumented.is_file() and "SupportOpenHelperFactory" in instrumented.read_text(encoding="utf-8"), "SQLCipher-backed Room dense-generation instrumentation source is missing")
 
-# The Phase 4C foundation intentionally contains no real model implementation or model weights.
+# Phase 4C remains an independently usable lexical/RRF foundation. Phase 5B may add one
+# explicitly pinned on-device provider behind LocalTextEmbeddingModel, but it must not silently
+# replace query routing or introduce arbitrary/remote implementations.
+allowed_local_provider = ROOT / "core/inference-runtime/src/main/java/app/timeline/islamic/core/inference/LiteRtEmbeddingTextModel.kt"
 for path in (ROOT / "core").rglob("*.kt"):
     text = path.read_text(encoding="utf-8")
-    if path.name != "CorpusContracts.kt":
-        require(not re.search(r"(?:class|object)\s+\w*Embedding\w*Model\b", text), f"Unexpected concrete embedding model implementation; require reviewed local model before dense retrieval: {path.relative_to(ROOT)}")
+    if path.name == "CorpusContracts.kt" or path == allowed_local_provider:
+        continue
+    require(not re.search(r"(?:class|object)\s+\w*Embedding\w*Model\b", text), f"Unexpected additional embedding model implementation outside the pinned Phase 5B provider: {path.relative_to(ROOT)}")
+require(allowed_local_provider.is_file() and "LocalTextEmbeddingModel" in allowed_local_provider.read_text(encoding="utf-8"),
+        "Phase 5B exposes only the pinned LiteRT-LM local EmbeddingGemma adapter")
+require("buildLocalEmbeddingIndexWithInstalledModel" in app and "embedSearchQueryWithInstalledModel" in app,
+        "embedding indexing and query calls are explicit app operations, not silently enabled retrieval defaults")
 
 if errors:
     print("Phase 4C foundation verification FAILED:", file=sys.stderr)
     for error in errors:
         print(f" - {error}", file=sys.stderr)
     sys.exit(1)
-print("Phase 4C guard passed: SAF corpus/keyring UI wiring, publisher-root gating, inactive-pack dense cleanup, bounded local embeddings, SQLCipher-only vector persistence and Arabic/English UI resources.")
+print("Phase 4C/5B guard passed: SAF corpus/keyring UI wiring, publisher-root gating, inactive-pack dense cleanup, SQLCipher-only vector persistence, FTS5/RRF fallback and one explicit pinned local embedding provider.")

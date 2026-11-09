@@ -1,6 +1,7 @@
 package app.timeline.islamic
 
 import android.app.Application
+import android.os.PowerManager
 import android.net.Uri
 import android.util.Base64
 import app.timeline.islamic.core.agent.AuditVerification
@@ -43,6 +44,10 @@ import app.timeline.islamic.core.models.ModelManager
 import app.timeline.islamic.core.models.ModelPreflightDecision
 import app.timeline.islamic.core.models.RoomModelRegistry
 import app.timeline.islamic.core.models.SafModelArtifactImporter
+import app.timeline.islamic.core.inference.LiteRtCpuGenerationRuntime
+import app.timeline.islamic.core.inference.LiteRtEmbeddingTextModel
+import app.timeline.islamic.core.inference.GenerationRuntimeSnapshot
+import app.timeline.islamic.core.inference.GenerationRuntimeState
 import app.timeline.islamic.feature.models.ModelManagementUiState
 import app.timeline.islamic.feature.models.ModelUiItem
 import app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord
@@ -119,6 +124,11 @@ class TimelineApplication : Application() {
     }
     private val modelResourceProbe by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         AndroidDeviceResourceProbe(this)
+    }
+    /** Serializes generation and embedding native engines: never keep both large weights resident. */
+    private val inferenceLifecycleMutex = Mutex()
+    private val generationRuntime by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        LiteRtCpuGenerationRuntime(modelManager, File(cacheDir, "litertlm"))
     }
     private val corpusInstaller by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         CorpusPackInstaller(this, corpusKeyring, corpusSignatureVerifier, corpusIndex, corpusRegistry)
@@ -281,6 +291,103 @@ class TimelineApplication : Application() {
         return LocalEmbeddingIndexBuilder(corpusIndex, denseEmbeddingIndexStore).build(record, indexFile, model)
     }
 
+    /** Load a catalog-pinned, installed Gemma artifact on LiteRT-LM CPU only. */
+    suspend fun loadGenerationModel(modelId: String) = inferenceLifecycleMutex.withLock {
+        val spec = ModelCatalog.require(modelId)
+        check(spec.task == app.timeline.islamic.core.models.ModelTask.GENERATION) {
+            "Selected artifact is not a generation model"
+        }
+        val installed = modelManager.installedModels().singleOrNull {
+            it.modelId == spec.id && it.revision == spec.revision
+        }
+        check(installed?.status == app.timeline.islamic.core.models.ModelLifecycleStatus.INSTALLED) {
+            "A verified installed model is required before runtime load"
+        }
+        val snapshot = modelResourceProbe.snapshot()
+        val runtimeBlock = runtimeLoadBlockReason(spec.minimumDeviceRamBytes, snapshot)
+        check(runtimeBlock == null) { runtimeBlock ?: "Runtime preflight blocked" }
+        generationRuntime.load(modelId)
+    }
+
+    suspend fun runGenerationSmokeTest(): String = inferenceLifecycleMutex.withLock {
+        check(generationRuntime.snapshot.value.state == GenerationRuntimeState.READY) {
+            "Load a generation model before running the smoke test"
+        }
+        generationRuntime.runSmokeTest()
+    }
+
+    suspend fun unloadGenerationModel() = inferenceLifecycleMutex.withLock {
+        generationRuntime.unload()
+    }
+
+    /**
+     * Build one dense generation from the verified installed EmbeddingGemma artifact. Existing
+     * lexical FTS5 and RRF search remain the fallback; this method never silently changes retrieval.
+     */
+    suspend fun buildLocalEmbeddingIndexWithInstalledModel(
+        packId: String,
+        version: String
+    ): LocalEmbeddingIndexBuilder.Result = inferenceLifecycleMutex.withLock {
+        val spec = ModelCatalog.require(LiteRtEmbeddingTextModel.EMBEDDING_MODEL_ID)
+        check(spec.task == app.timeline.islamic.core.models.ModelTask.EMBEDDING)
+        val installed = modelManager.installedModels().singleOrNull {
+            it.modelId == spec.id && it.revision == spec.revision
+        }
+        check(installed?.status == app.timeline.islamic.core.models.ModelLifecycleStatus.INSTALLED) {
+            "A verified installed EmbeddingGemma model is required before indexing"
+        }
+        val snapshot = modelResourceProbe.snapshot()
+        val runtimeBlock = runtimeLoadBlockReason(spec.minimumDeviceRamBytes, snapshot)
+        check(runtimeBlock == null) { runtimeBlock ?: "Embedding runtime preflight blocked" }
+        generationRuntime.unload()
+        val modelFile = modelManager.resolveInstalledFile(spec.id)
+        val embeddingModel = LiteRtEmbeddingTextModel.open(modelFile, File(cacheDir, "litertlm"))
+        try {
+            buildLocalEmbeddingIndex(packId, version, embeddingModel)
+        } finally {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable + kotlinx.coroutines.Dispatchers.IO) {
+                embeddingModel.close()
+            }
+        }
+    }
+
+    /** Returns a one-off query vector with the pinned query prefix; it does not switch retrieval. */
+    suspend fun embedSearchQueryWithInstalledModel(query: String): FloatArray = inferenceLifecycleMutex.withLock {
+        val spec = ModelCatalog.require(LiteRtEmbeddingTextModel.EMBEDDING_MODEL_ID)
+        val installed = modelManager.installedModels().singleOrNull {
+            it.modelId == spec.id && it.revision == spec.revision
+        }
+        check(installed?.status == app.timeline.islamic.core.models.ModelLifecycleStatus.INSTALLED) {
+            "A verified installed EmbeddingGemma model is required before query embedding"
+        }
+        val snapshot = modelResourceProbe.snapshot()
+        val runtimeBlock = runtimeLoadBlockReason(spec.minimumDeviceRamBytes, snapshot)
+        check(runtimeBlock == null) { runtimeBlock ?: "Embedding runtime preflight blocked" }
+        generationRuntime.unload()
+        val embeddingModel = LiteRtEmbeddingTextModel.open(
+            modelManager.resolveInstalledFile(spec.id), File(cacheDir, "litertlm")
+        )
+        try {
+            embeddingModel.embedSearchQuery(query)
+        } finally {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable + kotlinx.coroutines.Dispatchers.IO) {
+                embeddingModel.close()
+            }
+        }
+    }
+
+    private fun runtimeLoadBlockReason(minimumRamBytes: Long?, snapshot: app.timeline.islamic.core.models.ModelResourceSnapshot): String? = when {
+        snapshot.lowMemory -> "Android currently reports low memory; close other apps and retry"
+        minimumRamBytes != null && snapshot.totalRamBytes < minimumRamBytes -> "Device RAM is below this model's conservative resource floor"
+        snapshot.availableStorageBytes < MINIMUM_RUNTIME_CACHE_RESERVE_BYTES -> "Insufficient private storage for runtime cache reserve"
+        snapshot.thermalStatus != null && snapshot.thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE -> "Device is thermally constrained; retry after cooling"
+        else -> null
+    }
+
+    private companion object {
+        const val MINIMUM_RUNTIME_CACHE_RESERVE_BYTES = 512L * 1024L * 1024L
+    }
+
 
     /** Model inventory failure is distinct from an empty inventory; UI must fail closed. */
     suspend fun loadModelManagementState(): ModelManagementUiState {
@@ -301,7 +408,13 @@ class TimelineApplication : Application() {
                     status = row?.status
                 )
             }
-            ModelManagementUiState(loading = false, busy = false, inventoryReadable = true, items = items)
+            ModelManagementUiState(
+                loading = false,
+                busy = false,
+                inventoryReadable = true,
+                items = items,
+                runtimeSnapshot = generationRuntime.snapshot.value
+            )
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
@@ -324,7 +437,8 @@ class TimelineApplication : Application() {
         safModelImporter.import(uri, modelId)
     }
 
-    suspend fun removeModelArtifact(modelId: String) {
+    suspend fun removeModelArtifact(modelId: String) = inferenceLifecycleMutex.withLock {
+        if (generationRuntime.snapshot.value.modelId == modelId) generationRuntime.unload()
         check(modelManager.remove(modelId)) { "Model removal did not complete; its recovery state was retained" }
     }
 

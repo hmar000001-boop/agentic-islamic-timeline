@@ -1,3 +1,14 @@
+## 0.6.1-phase5b-litertlm-runtime — 2026-11-09
+
+- Continued from 0.6.0 without replacing Phase 0–5A. Added `:core:inference-runtime` and pinned `com.google.ai.edge.litertlm:litertlm-android:0.19.1`; app Android bytecode remains Java 17 while CI selects JDK 21 for the runtime dependency family.
+- Added a single-owner, CPU-only LiteRT-LM text-generation runtime. It verifies installed bytes through `ModelManager.resolveInstalledFile`, bounds the KV cache to 4,096 tokens, bounds prompts/output, uses one-shot conversations, handles cancellation, and closes native resources explicitly.
+- Tool safety: no ToolProvider is registered, `automaticToolCalling` is false, and any model-emitted tool call fails closed. Model output cannot invoke application actions; the existing authorization gateway remains authoritative.
+- Added an EmbeddingGemma 2 adapter for the existing `LocalTextEmbeddingModel` interface. It uses LiteRT-LM's documented asymmetric retrieval prefixes, batches no more than 24 texts, requests normalized 768-dimensional vectors, and rejects dimension, finite-value or L2-norm mismatches.
+- Connected explicit CPU load, runtime smoke-test and unload controls to the Models screen. The app serializes generation and embedding runtimes to avoid co-resident multi-GB model weights. Embedding index building is exposed explicitly; lexical FTS5/RRF retrieval is not silently changed.
+- Added JVM policy tests, API 36 LiteRT-LM configuration-shape instrumentation, a standalone Phase 5B contract script, unit/lint/instrumentation CI tasks, and the JDK 21 workflow selection. Expanded Android module count to 18.
+- No app Internet permission, cloud download, GPU/NPU path, Room schema migration, production authorization change or SQLCipher behavior change. Model weights remain private/no-backup files, not individually SQLCipher-encrypted.
+- App versionCode 22, versionName `0.6.1-phase5b-litertlm-runtime`. Actual hosted Gradle/KSP/Compose/native model load and Galaxy S24 FE performance validation remain release gates; Phase 5B is not yet CI-green or device-validated.
+
 ## 0.6.0-phase5a-model-manager-saf-import — 2026-11-09
 
 - Started Phase 5 incrementally from the CI-green 0.5.16 baseline. Added `:core:model-manager` and `:feature:model-management` without replacing Phase 0–4 modules or altering the Room v5 schema.

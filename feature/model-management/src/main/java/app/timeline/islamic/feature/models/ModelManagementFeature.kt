@@ -2,7 +2,7 @@ package app.timeline.islamic.feature.models
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -26,12 +26,15 @@ import androidx.compose.ui.unit.dp
 import app.timeline.islamic.core.models.ModelLifecycleStatus
 import app.timeline.islamic.core.models.ModelPreflightDecision
 import app.timeline.islamic.core.models.ModelTask
+import app.timeline.islamic.core.inference.GenerationRuntimeSnapshot
+import app.timeline.islamic.core.inference.GenerationRuntimeState
 
 data class ModelManagementUiState(
     val loading: Boolean = true,
     val busy: Boolean = false,
     val inventoryReadable: Boolean = true,
     val items: List<ModelUiItem> = emptyList(),
+    val runtimeSnapshot: GenerationRuntimeSnapshot = GenerationRuntimeSnapshot(),
     val message: String? = null
 )
 
@@ -56,7 +59,10 @@ fun ModelManagementFeature(
     onRefresh: () -> Unit,
     onImport: (String) -> Unit,
     onRemove: (String) -> Unit,
-    onPreflight: (String) -> Unit
+    onPreflight: (String) -> Unit,
+    onLoadGeneration: (String) -> Unit,
+    onRunSmokeTest: () -> Unit,
+    onUnloadGeneration: () -> Unit
 ) {
     Scaffold(topBar = {
         TopAppBar(
@@ -79,7 +85,11 @@ fun ModelManagementFeature(
                             busy = state.busy,
                             onImport = { onImport(item.id) },
                             onRemove = { onRemove(item.id) },
-                            onPreflight = { onPreflight(item.id) }
+                            onPreflight = { onPreflight(item.id) },
+                            runtime = state.runtimeSnapshot,
+                            onLoadGeneration = { onLoadGeneration(item.id) },
+                            onRunSmokeTest = onRunSmokeTest,
+                            onUnloadGeneration = onUnloadGeneration
                         )
                     }
                 }
@@ -94,7 +104,11 @@ private fun ModelCard(
     busy: Boolean,
     onImport: () -> Unit,
     onRemove: () -> Unit,
-    onPreflight: () -> Unit
+    onPreflight: () -> Unit,
+    runtime: GenerationRuntimeSnapshot,
+    onLoadGeneration: () -> Unit,
+    onRunSmokeTest: () -> Unit,
+    onUnloadGeneration: () -> Unit
 ) {
     val sizeMb = (item.expectedBytes / (1024L * 1024L)).toInt()
     val isArabic = LocalConfiguration.current.locales[0]?.language == "ar"
@@ -105,6 +119,13 @@ private fun ModelCard(
         ModelLifecycleStatus.QUARANTINED -> stringResource(R.string.models_quarantined)
         ModelLifecycleStatus.REMOVAL_PENDING -> stringResource(R.string.models_removal_pending)
     }
+    val isGenerationModel = item.task == ModelTask.GENERATION
+    val isActiveModel = runtime.modelId == item.id
+    val runtimeBusy = runtime.state == GenerationRuntimeState.LOADING || runtime.state == GenerationRuntimeState.GENERATING
+    val canLoad = item.status == ModelLifecycleStatus.INSTALLED && isGenerationModel && !busy && !runtimeBusy
+    val canRunSmoke = isActiveModel && runtime.state == GenerationRuntimeState.READY && !busy
+    val canUnload = isActiveModel && runtime.state in setOf(GenerationRuntimeState.READY, GenerationRuntimeState.FAILED) && !busy
+
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(item.displayName, style = MaterialTheme.typography.titleMedium)
@@ -129,13 +150,41 @@ private fun ModelCard(
                 }
                 Text(message, style = MaterialTheme.typography.bodySmall)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (isGenerationModel && isActiveModel) {
+                val runtimeLabel = when (runtime.state) {
+                    GenerationRuntimeState.UNLOADED -> stringResource(R.string.models_runtime_unloaded)
+                    GenerationRuntimeState.LOADING -> stringResource(R.string.models_runtime_loading)
+                    GenerationRuntimeState.READY -> stringResource(R.string.models_runtime_ready)
+                    GenerationRuntimeState.GENERATING -> stringResource(R.string.models_runtime_generating)
+                    GenerationRuntimeState.FAILED -> stringResource(R.string.models_runtime_failed, runtime.failureCode ?: "UNKNOWN")
+                }
+                Text(runtimeLabel, style = MaterialTheme.typography.bodySmall)
+                if (!runtime.lastOutput.isNullOrBlank()) {
+                    Text(stringResource(R.string.models_runtime_smoke_result), style = MaterialTheme.typography.labelSmall)
+                    Text(runtime.lastOutput!!, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 if (item.status == null) {
                     Button(onClick = onImport, enabled = !busy) { Text(stringResource(R.string.models_import)) }
                 } else if (item.status == ModelLifecycleStatus.INSTALLED || item.status == ModelLifecycleStatus.QUARANTINED || item.status == ModelLifecycleStatus.REMOVAL_PENDING) {
                     OutlinedButton(onClick = onRemove, enabled = !busy) { Text(stringResource(R.string.models_remove)) }
                 }
                 OutlinedButton(onClick = onPreflight, enabled = !busy) { Text(stringResource(R.string.models_preflight)) }
+                if (isGenerationModel && item.status == ModelLifecycleStatus.INSTALLED) {
+                    if (canRunSmoke) {
+                        Button(onClick = onRunSmokeTest, enabled = !runtimeBusy) { Text(stringResource(R.string.models_runtime_test)) }
+                    } else {
+                        Button(onClick = onLoadGeneration, enabled = canLoad) { Text(stringResource(R.string.models_runtime_load_cpu)) }
+                    }
+                    if (canUnload) {
+                        OutlinedButton(onClick = onUnloadGeneration, enabled = !busy) { Text(stringResource(R.string.models_runtime_unload)) }
+                    }
+                }
+                if (runtimeBusy && isActiveModel) CircularProgressIndicator()
             }
         }
     }

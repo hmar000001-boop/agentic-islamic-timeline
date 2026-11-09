@@ -78,6 +78,20 @@ class Api36EmulatorSetupTests(unittest.TestCase):
         self.assertIn('"$EMULATOR" -avd "$AVD_NAME"', self.starter)
         self.assertIn('-no-window -no-audio -no-boot-anim', self.starter)
 
+    def test_startup_script_pins_compatible_android_user_and_avd_homes(self) -> None:
+        self.assertIn('ANDROID_USER_HOME="${HOME}/.android"', self.starter)
+        self.assertIn('ANDROID_EMULATOR_HOME="$ANDROID_USER_HOME"', self.starter)
+        self.assertIn('ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"', self.starter)
+        self.assertIn('ANDROID_SDK_HOME="$HOME"', self.starter)
+        self.assertIn('unset ANDROID_PREFS_ROOT', self.starter)
+        self.assertIn('export ANDROID_USER_HOME ANDROID_EMULATOR_HOME ANDROID_AVD_HOME ANDROID_SDK_HOME', self.starter)
+        self.assertIn('AVD_INI_PATH="$ANDROID_AVD_HOME/${AVD_NAME}.ini"', self.starter)
+        self.assertIn('AVD_DATA_DIR="$ANDROID_AVD_HOME/${AVD_NAME}.avd"', self.starter)
+        self.assertIn('--path "$AVD_DATA_DIR"', self.starter)
+        self.assertIn('[[ ! -s "$AVD_INI_PATH" || ! -s "$AVD_DATA_DIR/config.ini" ]]', self.starter)
+        self.assertLess(self.starter.index('AVDMANAGER" create avd'), self.starter.index('[[ ! -s "$AVD_INI_PATH"'))
+        self.assertLess(self.starter.index('[[ ! -s "$AVD_INI_PATH"'), self.starter.index('nohup "$EMULATOR"'))
+
     def test_startup_script_reports_emulator_logs_on_boot_failure(self) -> None:
         self.assertIn("within 180 seconds", self.starter)
         self.assertIn("within 600 seconds", self.starter)
@@ -210,11 +224,16 @@ class Api36EmulatorSetupTests(unittest.TestCase):
             adb.chmod(0o755)
 
             pid_file = root / "mock-emulator.pid"
+            emulator_environment_file = root / "mock-emulator-environment.txt"
+            emulator_launch_calls_file = root / "mock-emulator-launches.txt"
             emulator = emulator_dir / "emulator"
             emulator.write_text(
                 "#!/usr/bin/env python3\n"
                 "import os, sys, time\n"
                 "if sys.argv[1:] == ['-version']:\n print('Android emulator mock'); raise SystemExit(0)\n"
+                f"with open({str(emulator_environment_file)!r}, 'w', encoding='utf-8') as out:\n"
+                " out.write(chr(10).join([os.environ.get('ANDROID_USER_HOME', ''), os.environ.get('ANDROID_EMULATOR_HOME', ''), os.environ.get('ANDROID_AVD_HOME', ''), os.environ.get('ANDROID_SDK_HOME', ''), ' '.join(sys.argv[1:])]))\n"
+                f"with open({str(emulator_launch_calls_file)!r}, 'a', encoding='utf-8') as calls: calls.write('launch\\n')\n"
                 f"open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
                 # A real emulator remains alive while adb registers the virtual
                 # device and Android reports sys.boot_completed=1. Keep the mock
@@ -238,16 +257,43 @@ class Api36EmulatorSetupTests(unittest.TestCase):
             )
             ldd.chmod(0o755)
 
+            avdmanager_environment_file = root / "mock-avdmanager-environment.txt"
             avdmanager = root / "avdmanager"
-            avdmanager.write_text("#!/bin/sh\ncat >/dev/null\nexit 0\n", encoding="utf-8")
+            avdmanager.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, pathlib, sys\n"
+                "args = sys.argv[1:]\n"
+                "if args[:2] == ['list', 'avd']:\n raise SystemExit(0)\n"
+                "sys.stdin.read()\n"
+                "if os.environ.get('MOCK_AVDMANAGER_SKIP_FILES') == '1':\n raise SystemExit(0)\n"
+                "avd_home = pathlib.Path(os.environ['ANDROID_AVD_HOME'])\n"
+                "path_arg = pathlib.Path(args[args.index('--path') + 1])\n"
+                "path_arg.mkdir(parents=True, exist_ok=True)\n"
+                "(avd_home / 'timeline-ci-api36.ini').write_text('path=' + str(path_arg) + '\\ntarget=android-36\\n', encoding='utf-8')\n"
+                "(path_arg / 'config.ini').write_text('AvdId=timeline-ci-api36\\nabi.type=x86_64\\n', encoding='utf-8')\n"
+                f"pathlib.Path({str(avdmanager_environment_file)!r}).write_text('\\n'.join([os.environ['ANDROID_USER_HOME'], os.environ['ANDROID_EMULATOR_HOME'], os.environ['ANDROID_AVD_HOME'], os.environ['ANDROID_SDK_HOME']]), encoding='utf-8')\n"
+                "print('Created mock API 36 AVD')\n"
+                "exit(0)\n",
+                encoding="utf-8",
+            )
             avdmanager.chmod(0o755)
             sudo = fake_bin / "sudo"
             sudo.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             sudo.chmod(0o755)
 
             env = os.environ.copy()
+            isolated_home = root / "home"
+            isolated_home.mkdir()
+            env["HOME"] = str(isolated_home)
             env["ANDROID_HOME"] = str(sdk)
             env["AVDMANAGER"] = str(avdmanager)
+            # Deliberately inject conflicting runner-level paths. The startup
+            # script must normalize modern and legacy SDK tools to one AVD home.
+            env["ANDROID_USER_HOME"] = str(root / "runner-user-home")
+            env["ANDROID_EMULATOR_HOME"] = str(root / "runner-emulator-home")
+            env["ANDROID_AVD_HOME"] = str(root / "runner-avd-home")
+            env["ANDROID_SDK_HOME"] = str(root / "runner-sdk-home")
+            env["ANDROID_PREFS_ROOT"] = str(root / "runner-prefs-root")
             # The workflow exports a job-wide ADB pointing at the real SDK.
             # Override it so the starter and this test use the same isolated SDK.
             env["ADB"] = str(adb)
@@ -283,6 +329,31 @@ class Api36EmulatorSetupTests(unittest.TestCase):
                             time.sleep(0.05)
             adb_calls = set(adb_calls_file.read_text(encoding="utf-8").splitlines())
             ldd_args = ldd_observations.read_text(encoding="utf-8").splitlines()
+            avdmanager_environment = avdmanager_environment_file.read_text(encoding="utf-8").splitlines()
+            emulator_environment = emulator_environment_file.read_text(encoding="utf-8").splitlines()
+            expected_android_user_home = str(isolated_home / ".android")
+            expected_android_avd_home = str(isolated_home / ".android" / "avd")
+            avd_ini = Path(expected_android_avd_home) / "timeline-ci-api36.ini"
+            avd_config = Path(expected_android_avd_home) / "timeline-ci-api36.avd" / "config.ini"
+            avd_ini_exists = avd_ini.is_file() and avd_ini.stat().st_size > 0
+            avd_config_exists = avd_config.is_file() and avd_config.stat().st_size > 0
+            # Also prove that a zero exit status from avdmanager is insufficient:
+            # if it creates neither the registration nor config file, the real
+            # emulator must not be launched.
+            avd_ini.unlink()
+            avd_config.unlink()
+            missing_avd_env = env.copy()
+            missing_avd_env["MOCK_AVDMANAGER_SKIP_FILES"] = "1"
+            missing_avd_result = subprocess.run(
+                ["bash", str(STARTER)],
+                env=missing_avd_env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=10,
+            )
+            emulator_launch_count = len(emulator_launch_calls_file.read_text(encoding="utf-8").splitlines())
 
         self.assertEqual(len(ldd_args), 2, ldd_args)
         self.assertEqual(ldd_args[0], str(qemu))
@@ -295,6 +366,21 @@ class Api36EmulatorSetupTests(unittest.TestCase):
         for directory in expected_library_dirs:
             self.assertIn(directory, ldd_args[1].split(os.pathsep))
         self.assertNotIn(str(emulator_lib_dir / "qt"), ldd_args[1])
+
+        expected_android_paths = [
+            expected_android_user_home,
+            expected_android_user_home,
+            expected_android_avd_home,
+            str(isolated_home),
+        ]
+        self.assertEqual(avdmanager_environment, expected_android_paths)
+        self.assertEqual(emulator_environment[:4], expected_android_paths)
+        self.assertIn("-avd timeline-ci-api36", emulator_environment[4])
+        self.assertTrue(avd_ini_exists, "mock avdmanager must create the emulator-discoverable AVD registration")
+        self.assertTrue(avd_config_exists, "mock avdmanager must create config.ini under the registered AVD directory")
+        self.assertEqual(missing_avd_result.returncode, 1, missing_avd_result.stdout + missing_avd_result.stderr)
+        self.assertIn("AVD creation did not produce a discoverable timeline-ci-api36 device", missing_avd_result.stderr)
+        self.assertEqual(emulator_launch_count, 1, "missing AVD files must prevent a second emulator launch")
 
         self.assertIsNotNone(result)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

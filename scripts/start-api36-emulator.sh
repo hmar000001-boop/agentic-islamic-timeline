@@ -18,6 +18,21 @@ QEMU_STDLIB_LIB_DIR="${EMULATOR_LIB_DIR}/libstdc++"
 AVD_NAME="timeline-ci-api36"
 LOG_FILE="${TIMELINE_EMULATOR_LOG:-/tmp/timeline-emulator.log}"
 
+# Pin every Android tool to one canonical per-user configuration root.
+# Modern SDK tools use ANDROID_USER_HOME/ANDROID_AVD_HOME; older avdmanager
+# versions derive ~/.android from ANDROID_SDK_HOME. These values deliberately
+# resolve to the same directories so AVD creation and emulator lookup cannot
+# diverge because of runner-inherited environment variables.
+ANDROID_USER_HOME="${HOME}/.android"
+ANDROID_EMULATOR_HOME="$ANDROID_USER_HOME"
+ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+ANDROID_SDK_HOME="$HOME"
+unset ANDROID_PREFS_ROOT
+export ANDROID_USER_HOME ANDROID_EMULATOR_HOME ANDROID_AVD_HOME ANDROID_SDK_HOME
+AVD_INI_PATH="$ANDROID_AVD_HOME/${AVD_NAME}.ini"
+AVD_DATA_DIR="$ANDROID_AVD_HOME/${AVD_NAME}.avd"
+mkdir -p "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME"
+
 print_diagnostics() {
   echo "--- adb devices ---" >&2
   if [[ -x "$ADB" ]]; then
@@ -101,8 +116,28 @@ sudo udevadm trigger --name-match=kvm
 printf 'no\n' | "$AVDMANAGER" create avd --force \
   --name "$AVD_NAME" \
   --package "system-images;android-36;google_apis;x86_64" \
-  --device pixel_6
+  --device pixel_6 \
+  --path "$AVD_DATA_DIR"
 
+# avdmanager can exit successfully while creating files in a location the
+# emulator does not search (for example, when old/new Android home variables
+# disagree). Verify both the root registration and the AVD's actual config
+# before launching QEMU.
+if [[ ! -s "$AVD_INI_PATH" || ! -s "$AVD_DATA_DIR/config.ini" ]]; then
+  echo "Android AVD creation did not produce a discoverable $AVD_NAME device." >&2
+  echo "Expected AVD registration: $AVD_INI_PATH" >&2
+  echo "Expected AVD config: $AVD_DATA_DIR/config.ini" >&2
+  echo "Resolved Android user home: $ANDROID_USER_HOME" >&2
+  echo "Resolved Android AVD home: $ANDROID_AVD_HOME" >&2
+  echo "Resolved legacy Android SDK home: $ANDROID_SDK_HOME" >&2
+  echo "--- AVD home contents ---" >&2
+  ls -la "$ANDROID_AVD_HOME" >&2 || true
+  echo "--- avdmanager list avd ---" >&2
+  "$AVDMANAGER" list avd >&2 || true
+  exit 1
+fi
+
+echo "Verified API 36 AVD registration and configuration under $ANDROID_AVD_HOME."
 "$ADB" start-server
 nohup "$EMULATOR" -avd "$AVD_NAME" \
   -no-window -no-audio -no-boot-anim \

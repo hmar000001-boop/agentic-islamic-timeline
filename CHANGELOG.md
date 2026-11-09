@@ -7,6 +7,12 @@
 - Cleaned non-fatal warnings from the supplied log: redundant `!!`, deprecated Material3 `Divider`, migration override parameter naming and authorization lease assertion.
 - No production policy, Room schema, app version metadata, dependency or feature scope changed.
 
+## 0.7.0 CI hotfix — Room v7 migration SQL verifier receiver (2026-11-09)
+- Fixed the CI false failure `Could not extract migration SQL for publisher_keyring_state`. Production Room migrations use `db.execSQL(...)`, but the Python schema verifier only recognized `database.execSQL(...)`.
+- Added a Kotlin string-literal-aware extractor that supports both receiver names and regression fixtures for both spellings and escaped quotes.
+- Strengthened the gate to verify the ordered 1→2→3→4→5→6→7 chain, SQLCipher `SupportOpenHelperFactory` wiring with the Keystore-managed passphrase, Room v7/28 entities, migration DDL, index/FK layout, Phase 5C invalidation, Phase 6 additive workspace migration and unrelated-data preservation.
+- No Room migration SQL, entities, app runtime, dependencies or version metadata changed. Local schema-fixture and related Phase 5C/6 contracts pass. Real Android Room/SQLCipher API 36 instrumentation remains required.
+
 ## 0.7.0 CI hotfix — JUnit 4 Model Manager test initialization (2026-11-09)
 
 - Fixed `ModelManagerTest.cancellationDuringImportRollsBackStagingAndRegistry`: its expression body ended in a nullable `Job?.cancel()` expression, which Kotlin emitted as a JVM `kotlin.Unit` return instead of `void`. JUnit 4 requires every `@Test` method to be public, parameterless and `void`; the mismatch caused `InvalidTestClassError` before any Model Manager test could execute.

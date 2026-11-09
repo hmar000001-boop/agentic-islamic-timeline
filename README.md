@@ -4,6 +4,10 @@
 **Current phase:** Phase 6 domain-engine foundation implemented in source; actual Gradle/KSP build, SQLCipher/API 36 instrumentation, user-device testing and scholarly rule-pack acceptance remain open. Phase 5C hosted/device acceptance is also pending from version 0.6.3.
 **Previous baseline:** Phase 0–4 implementation from 0.5.16; preserved incrementally.
 
+### 0.7.0 CI hotfix — Room v7 migration SQL verifier receiver (2026-11-09)
+
+The hosted workflow failed in `check-phase4-schema.py` before executing its SQLite migration simulation because the checker looked only for `database.execSQL(...)`, while the actual `AppDatabaseMigrations.kt` methods use the parameter name `db`. The checker now parses both valid receiver spellings, tests escaped Kotlin string literals, validates the complete ordered Room 1→2→3→4→5→6→7 chain and confirms that the app factory uses SQLCipher with the Keystore-managed passphrase. No Room migration or app code changed. Local SQLite fixture and source-contract checks pass; real SQLCipher/Room API 36 instrumentation remains a CI/device acceptance gate. See `docs/reports/ROOM_V7_SCHEMA_GUARD_FIX_2026-11-09.md`.
+
 ### 0.7.0 CI hotfix — cross-module thermal status smart cast (2026-11-09)
 
 The hosted Phase 6 unit-test command now passes `:core:model-manager:testDebugUnitTest`, confirming the prior JUnit 4 initialization fix. Compilation then exposed a Kotlin smart-cast error when the app read nullable `ModelResourceSnapshot.thermalStatus` directly across a module boundary. Both application runtime preflight and Model Manager now snapshot the nullable value once into a local immutable variable and use that stable value for the threshold decision. Added null-status unit coverage and a CI source guard. Also cleaned the non-fatal compiler warnings from the supplied run (publisher keyring null assertions, deprecated Material3 Divider, prayer-test null assertion, migration override parameter names, and authorization lease assertion). No domain behaviour, schema, dependency, offline policy or app version metadata changed.

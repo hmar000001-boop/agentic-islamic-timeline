@@ -42,6 +42,49 @@ checks = [
         "KeystoreAuditMacProvider(context, alias)" in audit_test,
         "historical-key verification reuses the initialized fixture Context",
     ),
+    (
+        all(name in auth_test for name in (
+            "ToolExecutionGateway", "ApprovedToolHandler", "ToolGatewayResult.ClaimRejected",
+            "ToolHandlerResult.Verified"
+        )),
+        "revoked scoped-grant instrumentation exercises the real side-effect gateway",
+    ),
+    (
+        "assertEquals(grant.grantId, db.authorizationDao().approvals(result.proposal.proposalId).single().sourceGrantId)" in auth_test,
+        "revoked-grant test proves the proposal approval is actually backed by the grant being revoked",
+    ),
+    (
+        "val handlerInvocations = AtomicInteger(0)" in auth_test
+        and "assertEquals(0, handlerInvocations.get())" in auth_test,
+        "revoked scoped grant proves the external handler is never invoked",
+    ),
+    (
+        'assertEquals("CLAIMED", db.authorizationDao().execution(claim.executionId)!!.state)' in auth_test
+        and 'assertEquals("CLAIMED", db.actionOutboxDao().getById(claim.executionId)!!.state)' in auth_test,
+        "denied executor start leaves both execution and outbox in CLAIMED before recovery",
+    ),
+    (
+        'assertEquals(1, authorizationStore.reconcileExecutingExecutions(clock.now()))' in auth_test
+        and 'assertEquals("ABORTED_BEFORE_EXECUTION", db.authorizationDao().execution(claim.executionId)!!.state)' in auth_test
+        and 'assertEquals(0, authorizationStore.reconcileExecutingExecutions(clock.now()))' in auth_test,
+        "one recovery pass aborts the unstarted claim and a second pass is idempotent",
+    ),
+    (
+        'assertEquals("ABORTED_BEFORE_EXECUTION", db.actionOutboxDao().getById(claim.executionId)!!.state)' in auth_test
+        and 'assertEquals(AgentTaskStatus.INTERRUPTED, taskStore.getTask("task-grant")!!.status)' in auth_test
+        and 'assertFalse(taskStore.heartbeat(lease, clock.now(), 60_000))' in auth_test,
+        "recovery synchronizes outbox, interrupts the task and expires its lease",
+    ),
+    (
+        'assertFalse(taskStore.events("task-grant").any { it.eventType == "ACTION_EXECUTOR_STARTED" })' in auth_test
+        and 'assertFalse(db.auditDao().allAscending().any { it.eventType == "ACTION_EXECUTION_STARTED" })' in auth_test,
+        "denied start writes no executor-start task event or audit event",
+    ),
+    (
+        ('assertEquals(0, authorizationStore.reconcileExecutingExecutions(clock.now()))\n'
+         'assertEquals(\"CLAIMED\"' not in auth_test),
+        "revocation recovery test does not assert contradictory repeated reconciliation",
+    ),
 ]
 
 failed = 0

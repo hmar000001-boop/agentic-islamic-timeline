@@ -1,3 +1,12 @@
+## 0.5.16-phase4c-revoked-grant-reconciliation-test-fix — 2026-11-09
+
+- Corrected the Room instrumentation test `revokedScopedGrantIsRecheckedAtExecutorStart`. The previous test asserted that startup reconciliation returned `0`, then immediately asserted that a second call returned `1` while the same execution remained `CLAIMED`. This was internally contradictory: `reconcileExecutingExecutions()` intentionally reconciles all `CLAIMED` records because the external handler is only called after the atomic `CLAIMED` → `EXECUTING` transition.
+- Preserved production authorization and recovery behavior. After a grant is revoked, `beginExecution()` re-reads the persisted grant in the same Room transaction that would transition the execution and outbox to `EXECUTING`; `HifzIntervalGrant.matches()` denies a row with `revokedAt != null`. The failed start leaves the claim `CLAIMED`, proving the handler was not allowed to start.
+- Strengthened the instrumentation test to exercise `ToolExecutionGateway` with a counted fake handler and assert `ClaimRejected` plus zero handler calls. It also verifies no executor-start task/audit event, both execution and outbox remain `CLAIMED` before recovery, one recovery pass moves both to `ABORTED_BEFORE_EXECUTION`, interrupts the task and expires its lease, and a second recovery pass returns `0`.
+- Extended `scripts/test-persistence-androidtest-contract.py` with regression guards for the gateway-level no-side-effect invariant and idempotent recovery assertions. No production authorization, Room, schema, migration, audit, outbox or task-state code changed.
+- Bumped app versionCode to 20 and versionName to `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`.
+- Local source/static contracts and project checks are run for this tranche. The real Android instrumentation test must be rerun on GitHub Actions; no claim of a hosted pass is made.
+
 ## 0.5.15-phase4c-persistence-androidtest-compile-fix — 2026-11-09
 
 - Fixed `:core:persistence:compileDebugAndroidTestKotlin`: added `:core:authorization` as an `androidTestImplementation` dependency because `AgentAuthorizationRoomTest` directly exercises `AuthorizationEngine`. The production `implementation`/`api` graph is unchanged.

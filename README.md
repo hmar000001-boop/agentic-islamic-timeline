@@ -1,8 +1,14 @@
+## 0.5.16 CI correction — revoked scoped-grant recovery assertions
+
+The 0.5.15 run compiled and packaged every instrumentation target, booted the API 36 AVD, and executed all test suites. Only `AgentAuthorizationRoomTest.revokedScopedGrantIsRecheckedAtExecutorStart` failed: its first recovery call expected `0`, then the same unchanged claim was expected to remain `CLAIMED` so a second recovery call could return `1`. The recovery implementation intentionally aborts `CLAIMED` executions on the first process-startup pass because no external handler has run before the atomic `EXECUTING` transition. The test is corrected to expect exactly one abort followed by an idempotent zero. It now exercises `ToolExecutionGateway` and proves the fake external handler is never invoked after grant revocation, the execution/outbox never become `EXECUTING`, no executor-start audit/task event is written, and recovery aborts the claim, interrupts the task, expires the lease and is idempotent. Production authorization/recovery behavior is unchanged.
+
+**Version:** `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`
+
 ## 0.5.15 CI correction — persistence instrumentation test classpath
 
 The hosted API 36 emulator now passes startup and Gradle reaches Android-test Kotlin compilation. The persistence instrumentation source set exposed two compile-time defects: `AgentAuthorizationRoomTest` imports `AuthorizationEngine` but the persistence module had not declared `:core:authorization` on its Android-test classpath, and `RoomAuditLogTest` referenced a `context` local that existed only inside `setUp`. The authorization module is now an `androidTestImplementation` dependency only, and the Android `Context` is held as a fixture property initialized in `setUp`. No production dependency edge, runtime behavior, Room schema, encryption, corpus, or retrieval behavior changes. CI runs a dedicated source-set contract check before Gradle.
 
-**Version:** `0.5.15-phase4c-persistence-androidtest-compile-fix`
+**Version:** `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`
 
 ## 0.5.14 CI correction — unify API 36 AVD creation and lookup paths
 
@@ -31,7 +37,7 @@ The last hosted run successfully assembled `:app:assembleOfflineSideloadDebug` a
 
 # Timeline Agentique
 
-**Version:** `0.5.15-phase4c-persistence-androidtest-compile-fix`
+**Version:** `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`
 
 ## 0.5.7 CI correction — app compile classpath and symbols
 
@@ -63,7 +69,7 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.15-phase4c-persistence-androidtest-compile-fix`
+**Current source version:** `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
 **Package ID:** provisional `app.timeline.islamic`

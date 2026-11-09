@@ -17,8 +17,8 @@ extensions.configure<ApplicationExtension>("android") {
         applicationId = "app.timeline.islamic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "0.5.15-phase4c-persistence-androidtest-compile-fix"
+        versionCode = 20
+        versionName = "0.5.16-phase4c-revoked-grant-reconciliation-test-fix"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     flavorDimensions += "distribution"

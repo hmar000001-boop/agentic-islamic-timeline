@@ -6,9 +6,14 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.timeline.islamic.core.agent.*
 import app.timeline.islamic.core.authorization.AuthorizationEngine
+import app.timeline.islamic.core.authorization.ApprovedToolHandler
+import app.timeline.islamic.core.authorization.ToolExecutionGateway
+import app.timeline.islamic.core.authorization.ToolGatewayResult
+import app.timeline.islamic.core.authorization.ToolHandlerResult
 import app.timeline.islamic.core.common.Clock
 import app.timeline.islamic.core.security.KeystoreAuditMacProvider
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -98,12 +103,38 @@ class AgentAuthorizationRoomTest {
         val change = HifzIntervalChange("plan-1", 7, 20, "daily-v2")
         val result = engine.proposeHifzIntervalChange("task-grant", lease, change, clock.now().plusSeconds(300)) as ActionProposalResult.CoveredByScopedGrant
         val claim = (engine.claimExecution(result.proposal.proposalId, result.proposal.parametersSha256, "idem-grant", lease) as ExecutionClaimResult.Claimed).claim
+        assertEquals(grant.grantId, db.authorizationDao().approvals(result.proposal.proposalId).single().sourceGrantId)
+
+        // Revocation is committed after the claim but before the executor-start transaction.
         assertTrue(engine.revokeGrant(grant.grantId))
+        assertNotNull(db.authorizationDao().grant(grant.grantId)!!.revokedAtEpochMillis)
         assertFalse(engine.beginExecution(claim))
-        assertEquals(0, authorizationStore.reconcileExecutingExecutions(clock.now()))
+
+        // Exercise the only side-effect gateway as well: a denied begin must never call a handler.
+        val handlerInvocations = AtomicInteger(0)
+        val gateway = ToolExecutionGateway(
+            engine,
+            mapOf(AuthorizationEngine.HIFZ_INTERVAL_ACTION to ApprovedToolHandler { _, _, _ ->
+                handlerInvocations.incrementAndGet()
+                ToolHandlerResult.Verified("unexpected-side-effect".toByteArray())
+            })
+        )
+        assertEquals(ToolGatewayResult.ClaimRejected, gateway.execute(claim, change.canonicalBytes()))
+        assertEquals(0, handlerInvocations.get())
+
+        // A rejected start remains CLAIMED: no external handler ran and no EXECUTING transition occurred.
         assertEquals("CLAIMED", db.authorizationDao().execution(claim.executionId)!!.state)
+        assertEquals("CLAIMED", db.actionOutboxDao().getById(claim.executionId)!!.state)
+        assertFalse(taskStore.events("task-grant").any { it.eventType == "ACTION_EXECUTOR_STARTED" })
+        assertFalse(db.auditDao().allAscending().any { it.eventType == "ACTION_EXECUTION_STARTED" })
+
+        // Process-startup recovery safely aborts an unstarted claim exactly once.
         assertEquals(1, authorizationStore.reconcileExecutingExecutions(clock.now()))
         assertEquals("ABORTED_BEFORE_EXECUTION", db.authorizationDao().execution(claim.executionId)!!.state)
+        assertEquals("ABORTED_BEFORE_EXECUTION", db.actionOutboxDao().getById(claim.executionId)!!.state)
+        assertEquals(AgentTaskStatus.INTERRUPTED, taskStore.getTask("task-grant")!!.status)
+        assertFalse(taskStore.heartbeat(lease, clock.now(), 60_000))
+        assertEquals(0, authorizationStore.reconcileExecutingExecutions(clock.now()))
     }
 
     @Test fun expiredLeaseAndExecutingOutboxAreNeverBlindlyReplayed() = runBlocking {

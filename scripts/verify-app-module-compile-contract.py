@@ -41,8 +41,8 @@ checks = [
      "AppDatabase public RoomDatabase supertype is explicit"),
     ('implementation(project(":core:persistence"))' in app_gradle,
      "app consumes the persistence module through its declared project dependency"),
-    ("versionCode = 19" in app_gradle and 'versionName = "0.5.15-phase4c-persistence-androidtest-compile-fix"' in app_gradle,
-     "application version is bumped for persistence Android-test compilation fix"),
+    ("versionCode = 20" in app_gradle and 'versionName = "0.5.16-phase4c-revoked-grant-reconciliation-test-fix"' in app_gradle,
+     "application version is bumped for revoked-grant executor/recovery instrumentation fix"),
 ]
 
 failed = 0

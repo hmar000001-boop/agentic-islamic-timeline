@@ -30,7 +30,7 @@ class EncryptedDatabaseTest {
         context.deleteDatabase(databaseName)
     }
 
-    @Test fun encryptedRoomDatabaseCanCloseAndReopen() = runBlocking {
+    @Test fun encryptedRoomDatabaseCanCloseAndReopen(): Unit = runBlocking {
         System.loadLibrary("sqlcipher")
         val passphrase = ByteArray(32).also(java.security.SecureRandom()::nextBytes)
         fun open(): AppDatabase = androidx.room.Room.databaseBuilder(context, AppDatabase::class.java, databaseName)
@@ -72,7 +72,7 @@ class EncryptedDatabaseTest {
 
 
 
-    @Test fun timelineDayWindowIncludesOverlapsButExcludesBoundaryTouchingItems() = runBlocking {
+    @Test fun timelineDayWindowIncludesOverlapsButExcludesBoundaryTouchingItems(): Unit = runBlocking {
         System.loadLibrary("sqlcipher")
         val isolatedName = "phase2-timeline-window-${System.nanoTime()}.db"
         val passphrase = ByteArray(32).also(java.security.SecureRandom()::nextBytes)
@@ -103,7 +103,7 @@ class EncryptedDatabaseTest {
         }
     }
 
-    @Test fun canvasDraftAndSnapshotsAreSavedAtomicallyWithVersionChecks() = runBlocking {
+    @Test fun canvasDraftAndSnapshotsAreSavedAtomicallyWithVersionChecks(): Unit = runBlocking {
         System.loadLibrary("sqlcipher")
         val isolatedName = "phase2-canvas-${System.nanoTime()}.db"
         val passphrase = ByteArray(32).also(java.security.SecureRandom()::nextBytes)

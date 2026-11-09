@@ -13,7 +13,7 @@ class ToolExecutionGatewayTest {
     private val hash = sha(parameters)
     private val claim = ExecutionClaim("exec-1", "proposal-1", hash, "hifz.adjust_review_interval", "plan-1", "idem-1", "task-1", "worker-1", 8, Instant.parse("2026-11-07T18:00:00Z"))
 
-    @Test fun wrongParameterBytesNeverReachHandler() = runBlocking {
+    @Test fun wrongParameterBytesNeverReachHandler(): Unit = runBlocking {
         val auth = FakeAuthorization()
         var called = false
         val gateway = ToolExecutionGateway(auth, mapOf(claim.actionType to ApprovedToolHandler { _, _, _ -> called = true; ToolHandlerResult.Verified() }))
@@ -22,14 +22,14 @@ class ToolExecutionGatewayTest {
         assertFalse(auth.started)
     }
 
-    @Test fun missingHandlerDoesNotStartExternalExecution() = runBlocking {
+    @Test fun missingHandlerDoesNotStartExternalExecution(): Unit = runBlocking {
         val auth = FakeAuthorization()
         val gateway = ToolExecutionGateway(auth, emptyMap())
         assertEquals(ToolGatewayResult.HandlerUnavailable, gateway.execute(claim, parameters))
         assertFalse(auth.started)
     }
 
-    @Test fun handlerRunsOnlyAfterAtomicClaimStart() = runBlocking {
+    @Test fun handlerRunsOnlyAfterAtomicClaimStart(): Unit = runBlocking {
         val auth = FakeAuthorization()
         var called = false
         val gateway = ToolExecutionGateway(auth, mapOf(claim.actionType to ApprovedToolHandler { _, _, key ->
@@ -42,7 +42,7 @@ class ToolExecutionGatewayTest {
         assertEquals(ExecutionOutcome.VERIFIED, auth.outcome)
     }
 
-    @Test fun failedClaimStartNeverCallsHandler() = runBlocking {
+    @Test fun failedClaimStartNeverCallsHandler(): Unit = runBlocking {
         val auth = FakeAuthorization().apply { allowBegin = false }
         var called = false
         val gateway = ToolExecutionGateway(auth, mapOf(claim.actionType to ApprovedToolHandler { _, _, _ -> called = true; ToolHandlerResult.Verified() }))
@@ -50,7 +50,7 @@ class ToolExecutionGatewayTest {
         assertFalse(called)
     }
 
-    @Test fun cancellationAfterExecutorStartAttemptsToPersistUnknownOutcome() = runBlocking {
+    @Test fun cancellationAfterExecutorStartAttemptsToPersistUnknownOutcome(): Unit = runBlocking {
         val auth = FakeAuthorization()
         val cancellationParameters = "{}".toByteArray()
         val cancellationClaim = claim.copy(proposalSha256 = sha(cancellationParameters))
@@ -64,7 +64,7 @@ class ToolExecutionGatewayTest {
         assertEquals(ExecutionOutcome.OUTCOME_UNKNOWN, auth.outcome)
     }
 
-    @Test fun handlerExceptionIsRecordedAsUnknownNotRetried() = runBlocking {
+    @Test fun handlerExceptionIsRecordedAsUnknownNotRetried(): Unit = runBlocking {
         val auth = FakeAuthorization()
         var calls = 0
         val gateway = ToolExecutionGateway(auth, mapOf(claim.actionType to ApprovedToolHandler { _, _, _ ->

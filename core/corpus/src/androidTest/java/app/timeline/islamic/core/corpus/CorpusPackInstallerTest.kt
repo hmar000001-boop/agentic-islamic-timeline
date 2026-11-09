@@ -27,7 +27,7 @@ import org.junit.runner.RunWith
 class CorpusPackInstallerTest {
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
-    @Test fun installsValidatedPackAndRetainsSignedManifestAndSignature() = runBlocking {
+    @Test fun installsValidatedPackAndRetainsSignedManifestAndSignature(): Unit = runBlocking {
         val packId = uniquePackId("install")
         val fixture = fixture(packId)
         val registry = MemoryRegistry()
@@ -141,7 +141,7 @@ class CorpusPackInstallerTest {
     }
 
 
-    @Test fun updateActivatesOnlyStrictlyNewerVersionAndRetainsSupersededEvidence() = runBlocking {
+    @Test fun updateActivatesOnlyStrictlyNewerVersionAndRetainsSupersededEvidence(): Unit = runBlocking {
         val packId = uniquePackId("update")
         val v1 = fixture(packId, version = "1.0.0")
         val v2 = fixture(packId, version = "1.1.0")
@@ -159,7 +159,7 @@ class CorpusPackInstallerTest {
         }
     }
 
-    @Test fun updateRejectsDowngradeAndPreservesCurrentActiveVersion() = runBlocking {
+    @Test fun updateRejectsDowngradeAndPreservesCurrentActiveVersion(): Unit = runBlocking {
         val packId = uniquePackId("downgrade")
         val v1 = fixture(packId, version = "2.0.0")
         val downgrade = fixture(packId, version = "1.9.9")

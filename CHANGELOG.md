@@ -1,3 +1,12 @@
+## 0.7.0 CI hotfix — JUnit 4 signatures across unit and Android tests (2026-11-09)
+
+- The API 36 run exposed two more JUnit initialization errors in `BundledSqliteCorpusIndexTest` and `RoomDomainWorkspaceTest`: expression-bodied `runBlocking` tests returned the `Throwable` from a final `assertThrows` expression instead of JVM `void`.
+- The earlier Model Manager-only signature guard was incomplete. Audited all Kotlin `src/test` and `src/androidTest` sources and made all **99 expression-bodied coroutine `@Test` methods** explicitly return `Unit` across 16 files. This preserves every test body and assertion while forcing the JUnit-compatible JVM `()V` descriptor.
+- Broadened `test-model-manager-junit-signatures.py` to scan all 42 Kotlin test source files and fail any future expression-bodied `@Test` without explicit `Unit`. It continues to protect the Model Manager cancellation/rollback regression.
+- CI step now explicitly identifies the global unit + Android-test JUnit signature guard.
+- Test and CI source-only change: no production behavior, Room schema, SQLCipher configuration, dependencies, minSdk, app versionName or versionCode changed.
+- Local validation: 99/99 source signatures pass; Kotlin compiler probe confirms non-Unit `runBlocking` results compile to JVM `()V` when the test declares `: Unit`; Phase 5C/Room v7/SQLCipher source/Phase 6 contracts, translations, secret scan, XML/YAML syntax and patch/ZIP reproducibility pass. A new hosted API 36 run is still required to execute the actual test bodies.
+
 ## 0.7.0 CI hotfix — cross-module thermal status nullability (2026-11-09)
 
 - Hosted CI confirmed the JUnit 4 `ModelManagerTest` initialization fix: `:core:model-manager:testDebugUnitTest` now passes.

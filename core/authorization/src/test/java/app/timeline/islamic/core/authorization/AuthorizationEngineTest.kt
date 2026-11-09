@@ -15,7 +15,7 @@ class AuthorizationEngineTest {
     private val engine = AuthorizationEngine(store, clock) { "id-${++idCounter}" }
     private val lease = TaskLease("task-1", "worker-1", now, now.plusSeconds(90), 7)
 
-    @Test fun ordinaryMutationCreatesPendingApprovalAndDoesNotExecute() = runBlocking {
+    @Test fun ordinaryMutationCreatesPendingApprovalAndDoesNotExecute(): Unit = runBlocking {
         val result = engine.propose("task-1", lease, "timeline.create", "item-1", bytes("{}"), ImpactClass.LOW, Reversibility.REVERSIBLE, now.plusSeconds(60))
         assertTrue(result is ActionProposalResult.NeedsApproval)
         assertEquals("WAITING_FOR_APPROVAL", store.taskState)
@@ -23,18 +23,18 @@ class AuthorizationEngineTest {
         assertEquals(ApprovalState.PENDING, store.approval?.state)
     }
 
-    @Test fun expiredProposalIsNotPersisted() = runBlocking {
+    @Test fun expiredProposalIsNotPersisted(): Unit = runBlocking {
         val result = engine.propose("task-1", lease, "timeline.create", "item-1", bytes("{}"), ImpactClass.LOW, Reversibility.REVERSIBLE, now)
         assertEquals(ActionProposalResult.Unavailable, result)
         assertNull(store.savedProposal)
     }
 
-    @Test fun emptyCanonicalParametersAreRejected() = runBlocking {
+    @Test fun emptyCanonicalParametersAreRejected(): Unit = runBlocking {
         val result = engine.propose("task-1", lease, "timeline.create", "item-1", byteArrayOf(), ImpactClass.LOW, Reversibility.REVERSIBLE, now.plusSeconds(60))
         assertEquals(ActionProposalResult.Unavailable, result)
     }
 
-    @Test fun canonicalParameterBufferIsCopiedBeforePersistence() = runBlocking {
+    @Test fun canonicalParameterBufferIsCopiedBeforePersistence(): Unit = runBlocking {
         val payload = bytes("{\"x\":1}")
         val result = engine.propose("task-1", lease, "timeline.create", "item-1", payload, ImpactClass.LOW, Reversibility.REVERSIBLE, now.plusSeconds(60))
         payload[0] = 0
@@ -43,14 +43,14 @@ class AuthorizationEngineTest {
         assertEquals("{\"x\":1}", store.canonicalBytes!!.toString(Charsets.UTF_8))
     }
 
-    @Test fun standardConfirmationCannotApproveHighImpactAction() = runBlocking {
+    @Test fun standardConfirmationCannotApproveHighImpactAction(): Unit = runBlocking {
         val proposal = needsApproval(ImpactClass.HIGH)
         val confirmation = UserConfirmation(proposal.proposalId, proposal.parametersSha256, now, ConfirmationStrength.STANDARD)
         assertFalse(engine.approve(confirmation))
         assertEquals(ApprovalState.PENDING, store.approval?.state)
     }
 
-    @Test fun strongConfirmationCanApproveHighImpactAction() = runBlocking {
+    @Test fun strongConfirmationCanApproveHighImpactAction(): Unit = runBlocking {
         val proposal = needsApproval(ImpactClass.HIGH)
         val confirmation = UserConfirmation(proposal.proposalId, proposal.parametersSha256, now, ConfirmationStrength.STRONG)
         assertTrue(engine.approve(confirmation))
@@ -58,26 +58,26 @@ class AuthorizationEngineTest {
         assertEquals("RUNNABLE", store.taskState)
     }
 
-    @Test fun alteredProposalHashCannotBeApproved() = runBlocking {
+    @Test fun alteredProposalHashCannotBeApproved(): Unit = runBlocking {
         val proposal = needsApproval()
         val confirmation = UserConfirmation(proposal.proposalId, "0".repeat(64), now, ConfirmationStrength.STANDARD)
         assertFalse(engine.approve(confirmation))
         assertEquals(ApprovalState.PENDING, store.approval?.state)
     }
 
-    @Test fun confirmationOlderThanTwoMinutesIsRejected() = runBlocking {
+    @Test fun confirmationOlderThanTwoMinutesIsRejected(): Unit = runBlocking {
         val proposal = needsApproval()
         val confirmation = UserConfirmation(proposal.proposalId, proposal.parametersSha256, now.minusSeconds(121), ConfirmationStrength.STANDARD)
         assertFalse(engine.approve(confirmation))
     }
 
-    @Test fun confirmationFromFutureIsRejected() = runBlocking {
+    @Test fun confirmationFromFutureIsRejected(): Unit = runBlocking {
         val proposal = needsApproval()
         val confirmation = UserConfirmation(proposal.proposalId, proposal.parametersSha256, now.plusSeconds(1), ConfirmationStrength.STANDARD)
         assertFalse(engine.approve(confirmation))
     }
 
-    @Test fun approvalLifetimeCannotExceedConfiguredBound() = runBlocking {
+    @Test fun approvalLifetimeCannotExceedConfiguredBound(): Unit = runBlocking {
         val proposal = needsApproval()
         val confirmation = UserConfirmation(proposal.proposalId, proposal.parametersSha256, now, ConfirmationStrength.STANDARD)
         try {
@@ -99,7 +99,7 @@ class AuthorizationEngineTest {
         assertTrue(grant.matches(change, created))
     }
 
-    @Test fun scopedHifzGrantCoversOnlyMatchingPlanRevisionAndSchedule() = runBlocking {
+    @Test fun scopedHifzGrantCoversOnlyMatchingPlanRevisionAndSchedule(): Unit = runBlocking {
         engine.grantHifzInterval("plan-1", 4, "daily-v1", 30, AuthorizationEngine.MIN_GRANT_LIFETIME_MILLIS, AuthorizationEngine.HIFZ_GRANT_POLICY_VERSION)
         val change = HifzIntervalChange("plan-1", 4, 25, "daily-v1")
         val result = engine.proposeHifzIntervalChange("task-1", lease, change, now.plusSeconds(60))
@@ -109,13 +109,13 @@ class AuthorizationEngineTest {
         assertNotNull(store.approval?.sourceGrantId)
     }
 
-    @Test fun scopedHifzGrantRejectsDeltaAboveMaximum() = runBlocking {
+    @Test fun scopedHifzGrantRejectsDeltaAboveMaximum(): Unit = runBlocking {
         engine.grantHifzInterval("plan-1", 4, "daily-v1", 30, AuthorizationEngine.MIN_GRANT_LIFETIME_MILLIS, AuthorizationEngine.HIFZ_GRANT_POLICY_VERSION)
         val result = engine.proposeHifzIntervalChange("task-1", lease, HifzIntervalChange("plan-1", 4, 31, "daily-v1"), now.plusSeconds(60))
         assertTrue(result is ActionProposalResult.NeedsApproval)
     }
 
-    @Test fun scopedHifzGrantRejectsChangedRevisionAndProfile() = runBlocking {
+    @Test fun scopedHifzGrantRejectsChangedRevisionAndProfile(): Unit = runBlocking {
         engine.grantHifzInterval("plan-1", 4, "daily-v1", 30, AuthorizationEngine.MIN_GRANT_LIFETIME_MILLIS, AuthorizationEngine.HIFZ_GRANT_POLICY_VERSION)
         val revisionChange = engine.proposeHifzIntervalChange("task-1", lease, HifzIntervalChange("plan-1", 5, 10, "daily-v1"), now.plusSeconds(60))
         assertTrue(revisionChange is ActionProposalResult.NeedsApproval)
@@ -124,14 +124,14 @@ class AuthorizationEngineTest {
         assertTrue(profileChange is ActionProposalResult.NeedsApproval)
     }
 
-    @Test fun revokedGrantStopsCoveringFutureProposals() = runBlocking {
+    @Test fun revokedGrantStopsCoveringFutureProposals(): Unit = runBlocking {
         val grant = engine.grantHifzInterval("plan-1", 4, "daily-v1", 30, AuthorizationEngine.MIN_GRANT_LIFETIME_MILLIS, AuthorizationEngine.HIFZ_GRANT_POLICY_VERSION)
         assertTrue(engine.revokeGrant(grant.grantId))
         val result = engine.proposeHifzIntervalChange("task-1", lease, HifzIntervalChange("plan-1", 4, 10, "daily-v1"), now.plusSeconds(60))
         assertTrue(result is ActionProposalResult.NeedsApproval)
     }
 
-    @Test fun obsoleteGrantPolicyCannotAuthorizeHifzChange() = runBlocking {
+    @Test fun obsoleteGrantPolicyCannotAuthorizeHifzChange(): Unit = runBlocking {
         val legacy = HifzIntervalChange("plan-1", 4, 1, "daily-v1")
         store.grant = HifzIntervalGrant(
             "legacy-grant", "plan-1", legacy.immutableFingerprint(), 30, now,
@@ -142,21 +142,21 @@ class AuthorizationEngineTest {
         assertNull(store.approval?.sourceGrantId)
     }
 
-    @Test fun persistentGrantLifetimeIsBounded() = runBlocking {
+    @Test fun persistentGrantLifetimeIsBounded(): Unit = runBlocking {
         try {
             engine.grantHifzInterval("plan-1", 4, "daily-v1", 30, AuthorizationEngine.MAX_GRANT_LIFETIME_MILLIS + 1, AuthorizationEngine.HIFZ_GRANT_POLICY_VERSION)
             fail("Expected grant lifetime validation to fail")
         } catch (_: IllegalArgumentException) { }
     }
 
-    @Test fun claimCannotProceedWithoutApproval() = runBlocking {
+    @Test fun claimCannotProceedWithoutApproval(): Unit = runBlocking {
         val proposal = needsApproval()
         val result = engine.claimExecution(proposal.proposalId, proposal.parametersSha256, "idempotency-1", lease)
         assertFalse(result is ExecutionClaimResult.Claimed)
         assertNull(store.claim)
     }
 
-    @Test fun claimAndBeginExecutionAreOneShot() = runBlocking {
+    @Test fun claimAndBeginExecutionAreOneShot(): Unit = runBlocking {
         val proposal = needsApproval()
         assertTrue(engine.approve(UserConfirmation(proposal.proposalId, proposal.parametersSha256, now, ConfirmationStrength.STANDARD)))
         store.resetTaskRunning()
@@ -166,7 +166,7 @@ class AuthorizationEngineTest {
         assertFalse(engine.beginExecution(claim))
     }
 
-    @Test fun delayedExecutorStartRechecksApprovalAndProposalExpiry() = runBlocking {
+    @Test fun delayedExecutorStartRechecksApprovalAndProposalExpiry(): Unit = runBlocking {
         val proposal = needsApproval()
         assertTrue(engine.approve(UserConfirmation(proposal.proposalId, proposal.parametersSha256, now, ConfirmationStrength.STANDARD)))
         store.resetTaskRunning()
@@ -176,7 +176,7 @@ class AuthorizationEngineTest {
         assertFalse(store.started)
     }
 
-    @Test fun delayedExecutorStartRechecksScopedGrantExpiry() = runBlocking {
+    @Test fun delayedExecutorStartRechecksScopedGrantExpiry(): Unit = runBlocking {
         engine.grantHifzInterval("plan-1", 4, "daily-v1", 30, AuthorizationEngine.MIN_GRANT_LIFETIME_MILLIS, AuthorizationEngine.HIFZ_GRANT_POLICY_VERSION)
         val result = engine.proposeHifzIntervalChange("task-1", lease, HifzIntervalChange("plan-1", 4, 10, "daily-v1"), now.plusSeconds(120))
         val proposal = (result as ActionProposalResult.CoveredByScopedGrant).proposal
@@ -186,7 +186,7 @@ class AuthorizationEngineTest {
         assertFalse(store.started)
     }
 
-    @Test fun verifiedExecutionOutcomeRequeuesTaskForNextAgentStep() = runBlocking {
+    @Test fun verifiedExecutionOutcomeRequeuesTaskForNextAgentStep(): Unit = runBlocking {
         val proposal = needsApproval()
         assertTrue(engine.approve(UserConfirmation(proposal.proposalId, proposal.parametersSha256, now, ConfirmationStrength.STANDARD)))
         store.resetTaskRunning()
@@ -197,7 +197,7 @@ class AuthorizationEngineTest {
         assertEquals("VERIFIED", store.outcome)
     }
 
-    @Test fun unknownOutcomeCannotBeRecordedTwice() = runBlocking {
+    @Test fun unknownOutcomeCannotBeRecordedTwice(): Unit = runBlocking {
         val proposal = needsApproval()
         engine.approve(UserConfirmation(proposal.proposalId, proposal.parametersSha256, now, ConfirmationStrength.STANDARD))
         store.resetTaskRunning()

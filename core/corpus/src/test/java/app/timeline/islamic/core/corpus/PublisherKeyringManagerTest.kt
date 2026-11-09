@@ -8,7 +8,7 @@ import org.junit.Test
 import java.security.MessageDigest
 
 class PublisherKeyringManagerTest {
-    @Test fun onlyRootVerifiedMonotonicKeyringsArePublished() = runBlocking {
+    @Test fun onlyRootVerifiedMonotonicKeyringsArePublished(): Unit = runBlocking {
         val store = MemoryStore()
         val root = PinnedPublisherRoot("offline-root-v1", ByteArray(32) { 9 })
         val verifier = TestVerifier()
@@ -31,7 +31,7 @@ class PublisherKeyringManagerTest {
         assertEquals(2, manager.version())
     }
 
-    @Test fun refreshReverifiesStoredBytesAndFutureOrBadSignaturesFailClosed() = runBlocking {
+    @Test fun refreshReverifiesStoredBytesAndFutureOrBadSignaturesFailClosed(): Unit = runBlocking {
         val store = MemoryStore()
         val root = PinnedPublisherRoot("offline-root-v1", ByteArray(32) { 8 })
         val verifier = TestVerifier()
@@ -54,7 +54,7 @@ class PublisherKeyringManagerTest {
     }
 
 
-    @Test fun keyIdsCannotBeReboundRemovedOrUnrevoked() = runBlocking {
+    @Test fun keyIdsCannotBeReboundRemovedOrUnrevoked(): Unit = runBlocking {
         val store = MemoryStore()
         val root = PinnedPublisherRoot("offline-root-v1", ByteArray(32) { 6 })
         val verifier = TestVerifier()

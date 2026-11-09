@@ -77,7 +77,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun unknownModelIsRejectedBeforeOpeningSourceOrCreatingRegistryRow() = runBlocking {
+    fun unknownModelIsRejectedBeforeOpeningSourceOrCreatingRegistryRow(): Unit = runBlocking {
         var opened = false
         assertThrows(IllegalStateException::class.java) {
             runBlocking { manager.import("not-in-catalog") { opened = true; ByteArrayInputStream(bytes) } }
@@ -87,7 +87,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun importVerifiesExactLengthAndDigestBeforeMarkingInstalled() = runBlocking {
+    fun importVerifiesExactLengthAndDigestBeforeMarkingInstalled(): Unit = runBlocking {
         val result = manager.import(spec.id) { ByteArrayInputStream(bytes) }
         assertEquals(ModelLifecycleStatus.INSTALLED, result.status)
         assertEquals(ModelLifecycleStatus.INSTALLED, registry.rows[result.recordId]?.status)
@@ -96,7 +96,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun wrongDigestRemovesOnlyAttemptOwnedBytesAndRegistryRow() = runBlocking {
+    fun wrongDigestRemovesOnlyAttemptOwnedBytesAndRegistryRow(): Unit = runBlocking {
         val altered = bytes.copyOf().also { it[0] = (it[0].toInt() xor 1).toByte() }
         assertThrows(IllegalArgumentException::class.java) {
             runBlocking { manager.import(spec.id) { ByteArrayInputStream(altered) } }
@@ -107,7 +107,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun truncatedStreamIsRejectedAndRolledBack() = runBlocking {
+    fun truncatedStreamIsRejectedAndRolledBack(): Unit = runBlocking {
         assertThrows(IllegalArgumentException::class.java) {
             runBlocking { manager.import(spec.id) { ByteArrayInputStream(bytes.copyOf(bytes.size - 1)) } }
         }
@@ -116,7 +116,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun oversizedStreamIsRejectedAndRolledBack() = runBlocking {
+    fun oversizedStreamIsRejectedAndRolledBack(): Unit = runBlocking {
         assertThrows(IllegalArgumentException::class.java) {
             runBlocking { manager.import(spec.id) { ByteArrayInputStream(bytes + byteArrayOf(1)) } }
         }
@@ -157,7 +157,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun failedImportCleanupRetainsQuarantinedRegistryRecord() = runBlocking {
+    fun failedImportCleanupRetainsQuarantinedRegistryRecord(): Unit = runBlocking {
         files.allowDelete = false
         val altered = bytes.copyOf().also { it[0] = (it[0].toInt() xor 1).toByte() }
         assertThrows(IllegalArgumentException::class.java) {
@@ -168,7 +168,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun duplicateRevisionCannotBeImportedTwice() = runBlocking {
+    fun duplicateRevisionCannotBeImportedTwice(): Unit = runBlocking {
         manager.import(spec.id) { ByteArrayInputStream(bytes) }
         var opened = false
         assertThrows(IllegalStateException::class.java) {
@@ -179,7 +179,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun preexistingUnregisteredFinalArtifactIsNeverDeletedByFailedImport() = runBlocking {
+    fun preexistingUnregisteredFinalArtifactIsNeverDeletedByFailedImport(): Unit = runBlocking {
         files.prepare(spec)
         files.finalFile(spec).writeBytes(byteArrayOf(9, 8, 7))
         assertThrows(IllegalArgumentException::class.java) {
@@ -191,7 +191,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun destinationAppearingImmediatelyBeforeCommitIsNeverDeletedByRollback() = runBlocking {
+    fun destinationAppearingImmediatelyBeforeCommitIsNeverDeletedByRollback(): Unit = runBlocking {
         val unrelated = byteArrayOf(7, 6, 5, 4)
         files.beforeCommit = { files.finalFile(spec).writeBytes(unrelated) }
         assertThrows(IllegalStateException::class.java) {
@@ -203,7 +203,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun renameCompletedButDirectorySyncFailedIsRecoveredWithoutDeletingCommittedBytes() = runBlocking {
+    fun renameCompletedButDirectorySyncFailedIsRecoveredWithoutDeletingCommittedBytes(): Unit = runBlocking {
         files.failAfterAtomicRename = true
         assertThrows(ModelCommitRecoveryRequired::class.java) {
             runBlocking { manager.import(spec.id) { ByteArrayInputStream(bytes) } }
@@ -220,7 +220,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun interruptedInstallWithVerifiedFinalArtifactIsRecovered() = runBlocking {
+    fun interruptedInstallWithVerifiedFinalArtifactIsRecovered(): Unit = runBlocking {
         val row = newRecord(ModelLifecycleStatus.INSTALLING)
         registry.rows[row.recordId] = row
         files.prepare(spec)
@@ -231,7 +231,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun interruptedInstallWithoutValidFinalArtifactIsRemoved() = runBlocking {
+    fun interruptedInstallWithoutValidFinalArtifactIsRemoved(): Unit = runBlocking {
         val row = newRecord(ModelLifecycleStatus.INSTALLING)
         registry.rows[row.recordId] = row
         files.prepare(spec)
@@ -244,7 +244,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun interruptedInstallNeverDeletesAnUnregisteredInvalidFinalArtifact() = runBlocking {
+    fun interruptedInstallNeverDeletesAnUnregisteredInvalidFinalArtifact(): Unit = runBlocking {
         val row = newRecord(ModelLifecycleStatus.INSTALLING)
         registry.rows[row.recordId] = row
         files.prepare(spec)
@@ -259,7 +259,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun interruptedInstallNeverDeletesOrphanPartialWithoutMatchingMarker() = runBlocking {
+    fun interruptedInstallNeverDeletesOrphanPartialWithoutMatchingMarker(): Unit = runBlocking {
         val row = newRecord(ModelLifecycleStatus.INSTALLING)
         registry.rows[row.recordId] = row
         files.prepare(spec)
@@ -274,7 +274,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun mismatchedInstallOwnershipMarkerQuarantinesWithoutDeletingPartial() = runBlocking {
+    fun mismatchedInstallOwnershipMarkerQuarantinesWithoutDeletingPartial(): Unit = runBlocking {
         val row = newRecord(ModelLifecycleStatus.INSTALLING)
         registry.rows[row.recordId] = row
         files.prepare(spec)
@@ -289,7 +289,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun installedArtifactTamperingIsQuarantinedDuringRecovery() = runBlocking {
+    fun installedArtifactTamperingIsQuarantinedDuringRecovery(): Unit = runBlocking {
         manager.import(spec.id) { ByteArrayInputStream(bytes) }
         val row = registry.rows.values.single()
         files.finalFile(spec).writeBytes(bytes.copyOf().also { it[0] = (it[0].toInt() xor 1).toByte() })
@@ -299,7 +299,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun resolveRehashesImmediatelyAndQuarantinesTamperedFile() = runBlocking {
+    fun resolveRehashesImmediatelyAndQuarantinesTamperedFile(): Unit = runBlocking {
         manager.import(spec.id) { ByteArrayInputStream(bytes) }
         files.finalFile(spec).writeBytes(byteArrayOf(0))
         assertThrows(IllegalStateException::class.java) { runBlocking { manager.resolveInstalledFile(spec.id) } }
@@ -307,7 +307,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun removalDeletesFilesBeforeDeletingRegistryRecord() = runBlocking {
+    fun removalDeletesFilesBeforeDeletingRegistryRecord(): Unit = runBlocking {
         manager.import(spec.id) { ByteArrayInputStream(bytes) }
         val record = registry.rows.values.single()
         assertTrue(manager.remove(spec.id))
@@ -316,7 +316,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun explicitRemovalPreservesArtifactWithoutMatchingOwnershipMarker() = runBlocking {
+    fun explicitRemovalPreservesArtifactWithoutMatchingOwnershipMarker(): Unit = runBlocking {
         val row = newRecord(ModelLifecycleStatus.QUARANTINED)
         registry.rows[row.recordId] = row
         files.prepare(spec)
@@ -329,7 +329,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun failedRemovalRetainsRemovalPendingRegistryRecord() = runBlocking {
+    fun failedRemovalRetainsRemovalPendingRegistryRecord(): Unit = runBlocking {
         manager.import(spec.id) { ByteArrayInputStream(bytes) }
         val record = registry.rows.values.single()
         files.allowDelete = false
@@ -339,7 +339,7 @@ class ModelManagerTest {
     }
 
     @Test
-    fun pendingRemovalCanBeRecoveredAndDeletedLater() = runBlocking {
+    fun pendingRemovalCanBeRecoveredAndDeletedLater(): Unit = runBlocking {
         manager.import(spec.id) { ByteArrayInputStream(bytes) }
         val record = registry.rows.values.single()
         files.allowDelete = false

@@ -76,7 +76,7 @@ jobs:
         run: python3 scripts/test-persistence-androidtest-contract.py
       - name: Verify Phase 5A offline model manager contract
         run: python3 scripts/test-model-manager-contract.py
-      - name: Verify JUnit 4 model-manager test method signatures
+      - name: Verify all JUnit 4 unit and Android test method signatures
         run: python3 scripts/test-model-manager-junit-signatures.py
       - name: Verify cross-module thermal status nullability handling
         run: python3 scripts/test-thermal-status-cross-module-contract.py

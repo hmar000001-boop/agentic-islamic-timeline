@@ -22,7 +22,7 @@ import org.junit.runner.RunWith
 class RoomDenseEmbeddingIndexStoreTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
-    @Test fun encryptedRoomDenseIndexPublishesAndReplacesGenerationsAtomically() = runBlocking {
+    @Test fun encryptedRoomDenseIndexPublishesAndReplacesGenerationsAtomically(): Unit = runBlocking {
         System.loadLibrary("sqlcipher")
         val name = "phase4c-dense-index-${System.nanoTime()}.db"
         val passphrase = ByteArray(32).also(SecureRandom()::nextBytes)
@@ -65,7 +65,7 @@ class RoomDenseEmbeddingIndexStoreTest {
         }
     }
 
-    @Test fun abandonedStagingGenerationIsRecoveredWithoutRemovingPreviousActiveGeneration() = runBlocking {
+    @Test fun abandonedStagingGenerationIsRecoveredWithoutRemovingPreviousActiveGeneration(): Unit = runBlocking {
         System.loadLibrary("sqlcipher")
         val name = "phase4c-dense-recovery-${System.nanoTime()}.db"
         val passphrase = ByteArray(32).also(SecureRandom()::nextBytes)

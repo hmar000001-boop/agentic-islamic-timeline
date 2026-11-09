@@ -44,7 +44,7 @@ class AgentAuthorizationRoomTest {
 
     @After fun tearDown() { db.close() }
 
-    @Test fun leaseFenceIncreasesAfterReleaseAndResume() = runBlocking {
+    @Test fun leaseFenceIncreasesAfterReleaseAndResume(): Unit = runBlocking {
         taskStore.createTask("task-lease", "HIFZ_REVIEW", clock.now())
         val first = (taskStore.acquireLease("task-lease", "worker-a", clock.now(), 60_000) as LeaseAcquireResult.Acquired).lease
         assertTrue(taskStore.releaseLease(first, clock.now().plusSeconds(1)))
@@ -57,7 +57,7 @@ class AgentAuthorizationRoomTest {
         assertFalse(taskStore.heartbeat(first, clock.now(), 60_000))
     }
 
-    @Test fun staleFenceCannotCreateActionProposal() = runBlocking {
+    @Test fun staleFenceCannotCreateActionProposal(): Unit = runBlocking {
         taskStore.createTask("task-fence", "HIFZ_REVIEW", clock.now())
         val first = (taskStore.acquireLease("task-fence", "worker-a", clock.now(), 60_000) as LeaseAcquireResult.Acquired).lease
         assertTrue(taskStore.releaseLease(first, clock.now().plusSeconds(1)))
@@ -73,7 +73,7 @@ class AgentAuthorizationRoomTest {
         assertTrue(second.fencingToken > first.fencingToken)
     }
 
-    @Test fun normalApprovalMustBeReacquiredBeforeClaimAndExecutorCanStartOnlyOnce() = runBlocking {
+    @Test fun normalApprovalMustBeReacquiredBeforeClaimAndExecutorCanStartOnlyOnce(): Unit = runBlocking {
         taskStore.createTask("task-approval", "TIMELINE_ACTION", clock.now())
         val firstLease = (taskStore.acquireLease("task-approval", "planner", clock.now(), 60_000) as LeaseAcquireResult.Acquired).lease
         val result = engine.propose(
@@ -96,7 +96,7 @@ class AgentAuthorizationRoomTest {
         assertFalse(engine.recordExecutionOutcome(claim, ExecutionOutcome.VERIFIED))
     }
 
-    @Test fun revokedScopedGrantIsRecheckedAtExecutorStart() = runBlocking {
+    @Test fun revokedScopedGrantIsRecheckedAtExecutorStart(): Unit = runBlocking {
         taskStore.createTask("task-grant", "HIFZ_REVIEW", clock.now())
         val lease = (taskStore.acquireLease("task-grant", "planner", clock.now(), 60_000) as LeaseAcquireResult.Acquired).lease
         val grant = engine.grantHifzInterval("plan-1", 7, "daily-v2", 25, 60_000, AuthorizationEngine.HIFZ_GRANT_POLICY_VERSION)
@@ -137,7 +137,7 @@ class AgentAuthorizationRoomTest {
         assertEquals(0, authorizationStore.reconcileExecutingExecutions(clock.now()))
     }
 
-    @Test fun expiredLeaseAndExecutingOutboxAreNeverBlindlyReplayed() = runBlocking {
+    @Test fun expiredLeaseAndExecutingOutboxAreNeverBlindlyReplayed(): Unit = runBlocking {
         taskStore.createTask("task-reconcile", "TIMELINE_ACTION", clock.now())
         val lease = (taskStore.acquireLease("task-reconcile", "planner", clock.now(), 60_000) as LeaseAcquireResult.Acquired).lease
         val result = engine.propose(
@@ -156,7 +156,7 @@ class AgentAuthorizationRoomTest {
         assertFalse(engine.beginExecution(claim))
     }
 
-    @Test fun delayedExecutorStartRejectsExpiredLeaseUsingCurrentClock() = runBlocking {
+    @Test fun delayedExecutorStartRejectsExpiredLeaseUsingCurrentClock(): Unit = runBlocking {
         taskStore.createTask("task-delayed-start", "TIMELINE_ACTION", clock.now())
         val lease = (taskStore.acquireLease("task-delayed-start", "planner", clock.now(), 60_000) as LeaseAcquireResult.Acquired).lease
         val result = engine.propose(
@@ -174,7 +174,7 @@ class AgentAuthorizationRoomTest {
         assertEquals("ABORTED_BEFORE_EXECUTION", db.authorizationDao().execution(claim.executionId)!!.state)
     }
 
-    @Test fun expiredScopedGrantIsRecheckedAtExecutorStart() = runBlocking {
+    @Test fun expiredScopedGrantIsRecheckedAtExecutorStart(): Unit = runBlocking {
         taskStore.createTask("task-expired-grant", "HIFZ_REVIEW", clock.now())
         val lease = (taskStore.acquireLease("task-expired-grant", "planner", clock.now(), 120_000) as LeaseAcquireResult.Acquired).lease
         val grant = engine.grantHifzInterval("plan-expiry", 2, "daily-expiry", 15, AuthorizationEngine.MIN_GRANT_LIFETIME_MILLIS, AuthorizationEngine.HIFZ_GRANT_POLICY_VERSION)
@@ -190,7 +190,7 @@ class AgentAuthorizationRoomTest {
         assertNull(db.authorizationDao().grant(grant.grantId)!!.revokedAtEpochMillis)
     }
 
-    @Test fun expiredPendingApprovalIsExpiredAndTaskRequeued() = runBlocking {
+    @Test fun expiredPendingApprovalIsExpiredAndTaskRequeued(): Unit = runBlocking {
         taskStore.createTask("task-approval-expiry", "TIMELINE_ACTION", clock.now())
         val lease = (taskStore.acquireLease("task-approval-expiry", "planner", clock.now(), 60_000) as LeaseAcquireResult.Acquired).lease
         val result = engine.propose(
@@ -203,7 +203,7 @@ class AgentAuthorizationRoomTest {
         assertEquals(ApprovalState.EXPIRED, authorizationStore.approvals(result.proposal.proposalId).single().state)
     }
 
-    @Test fun concurrentExecutorStartConsumesTheClaimExactlyOnce() = runBlocking {
+    @Test fun concurrentExecutorStartConsumesTheClaimExactlyOnce(): Unit = runBlocking {
         taskStore.createTask("task-concurrent-start", "TIMELINE_ACTION", clock.now())
         val lease = (taskStore.acquireLease("task-concurrent-start", "planner", clock.now(), 120_000) as LeaseAcquireResult.Acquired).lease
         val result = engine.propose(
@@ -219,7 +219,7 @@ class AgentAuthorizationRoomTest {
         assertEquals("EXECUTING", db.authorizationDao().execution(claim.executionId)!!.state)
     }
 
-    @Test fun verifiedExecutionOutcomeReleasesLeaseAndRequeuesTask() = runBlocking {
+    @Test fun verifiedExecutionOutcomeReleasesLeaseAndRequeuesTask(): Unit = runBlocking {
         taskStore.createTask("task-verified", "TIMELINE_ACTION", clock.now())
         val plannerLease = (taskStore.acquireLease("task-verified", "planner", clock.now(), 120_000) as LeaseAcquireResult.Acquired).lease
         val result = engine.propose(

@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
+import androidx.room.ColumnInfo
 
 @Entity(tableName = "timeline_item", indices = [Index("startsAtEpochMillis"), Index("status")])
 data class TimelineItemEntity(
@@ -306,7 +307,9 @@ data class DenseIndexGenerationEntity(
     val encodedBytes: Long,
     val maximumEncodedBytes: Long,
     val state: String,
-    val createdAtEpochMillis: Long
+    val createdAtEpochMillis: Long,
+    @ColumnInfo(defaultValue = "''") val corpusManifestSha256: String,
+    @ColumnInfo(defaultValue = "''") val embeddingProfileSha256: String
 )
 
 @Entity(

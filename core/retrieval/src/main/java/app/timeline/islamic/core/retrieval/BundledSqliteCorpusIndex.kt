@@ -9,6 +9,7 @@ import app.timeline.islamic.core.knowledge.CorpusIndexValidator
 import app.timeline.islamic.core.knowledge.CorpusLanguage
 import app.timeline.islamic.core.knowledge.EmbeddingPassageInput
 import app.timeline.islamic.core.knowledge.EmbeddingPassageSource
+import app.timeline.islamic.core.knowledge.EvidenceEligibility
 import app.timeline.islamic.core.knowledge.CorpusPackManifest
 import app.timeline.islamic.core.knowledge.CorpusSourceMetadata
 import app.timeline.islamic.core.knowledge.CorpusSourceType
@@ -26,8 +27,9 @@ import java.io.File
  * require FTS5 on every supported Android release. A fresh connection is scoped to a single operation.
  */
 class BundledSqliteCorpusIndex(
-    private val driver: BundledSQLiteDriver = BundledSQLiteDriver()
-) : CorpusIndexValidator, CorpusPackIndexSearcher, EmbeddingPassageSource {
+    private val driver: BundledSQLiteDriver = BundledSQLiteDriver(),
+    private val clock: () -> Long = System::currentTimeMillis
+) : CorpusIndexValidator, CorpusPackIndexSearcher, EmbeddingPassageSource, DenseEvidenceLookup {
 
     override fun validate(indexFile: File, manifest: CorpusPackManifest, asOfEpochMillis: Long): CorpusIndexValidationReport {
         require(indexFile.isFile && indexFile.length() > 0L) { "Corpus SQLite file is absent or empty" }
@@ -101,6 +103,11 @@ class BundledSqliteCorpusIndex(
             )
             require(invalidRows == 0L) { "Corpus contains null, malformed, oversized or unsupported source/passage fields" }
             require(orphanPassages == 0L) { "Corpus contains passages without source/edition metadata" }
+            val duplicateEvidenceKeys = scalarLong(
+                connection,
+                "SELECT COUNT(*) - COUNT(DISTINCT stable_evidence_key) FROM passage"
+            )
+            require(duplicateEvidenceKeys == 0L) { "Corpus contains duplicate stable evidence keys; dense index keys must be unique" }
             val ineligibleSources = connection.prepare(
                 "SELECT COUNT(*) FROM source WHERE license_status <> 'CLEARED' OR trim(license_id) = '' OR trim(rights_holder) = '' OR license_verified_at_epoch_ms IS NULL OR license_verified_at_epoch_ms <= 0 OR license_verified_at_epoch_ms > ? OR (license_expires_at_epoch_ms IS NOT NULL AND license_expires_at_epoch_ms <= ?) OR review_status <> 'APPROVED' OR reviewer_id IS NULL OR trim(reviewer_id) = '' OR reviewed_at_epoch_ms IS NULL OR reviewed_at_epoch_ms <= 0 OR reviewed_at_epoch_ms > ? OR length(provenance_sha256) <> 64 OR provenance_sha256 GLOB '*[^a-f0-9]*'"
             ).use { statement ->
@@ -156,26 +163,63 @@ class BundledSqliteCorpusIndex(
         pack: app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord,
         indexFile: File,
         afterRowId: Long,
-        limit: Int
+        limit: Int,
+        maximumInputCharacters: Int
     ): List<EmbeddingPassageInput> {
         require(pack.status == app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord.STATUS_INSTALLED)
         require(indexFile.isFile && afterRowId >= 0L && limit in 1..64)
+        require(maximumInputCharacters in 256..65_536)
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             open(indexFile).use { connection ->
                 connection.execSQL("PRAGMA query_only = ON")
+                val asOfEpochMillis = clock()
                 connection.prepare(
-                    "SELECT rowid, stable_evidence_key, original_text FROM passage WHERE rowid > ? ORDER BY rowid ASC LIMIT ?"
+                    """
+                    SELECT p.rowid, p.stable_evidence_key, p.original_text, p.content_sha256,
+                           s.source_id, s.edition_id, p.locator, p.language, p.normalized_text
+                    FROM passage p JOIN source s ON s.source_id = p.source_id
+                    WHERE p.rowid > ?
+                      AND length(p.original_text) <= ?
+                      AND p.normalizer_version = ?
+                      AND length(p.stable_evidence_key) = 64 AND p.stable_evidence_key NOT GLOB '*[^a-f0-9]*'
+                      AND s.license_status = 'CLEARED'
+                      AND trim(s.license_id) <> '' AND trim(s.rights_holder) <> ''
+                      AND s.license_verified_at_epoch_ms IS NOT NULL
+                      AND s.license_verified_at_epoch_ms > 0 AND s.license_verified_at_epoch_ms <= ?
+                      AND (s.license_expires_at_epoch_ms IS NULL OR s.license_expires_at_epoch_ms > ?)
+                      AND s.review_status = 'APPROVED'
+                      AND s.reviewer_id IS NOT NULL AND trim(s.reviewer_id) <> ''
+                      AND s.reviewed_at_epoch_ms IS NOT NULL
+                      AND s.reviewed_at_epoch_ms > 0 AND s.reviewed_at_epoch_ms <= ?
+                      AND length(s.provenance_sha256) = 64 AND s.provenance_sha256 NOT GLOB '*[^a-f0-9]*'
+                    ORDER BY p.rowid ASC LIMIT ?
+                    """.trimIndent()
                 ).use { statement ->
                     statement.bindLong(1, afterRowId)
-                    statement.bindLong(2, limit.toLong())
+                    statement.bindLong(2, maximumInputCharacters.toLong())
+                    statement.bindText(3, CorpusTextNormalizer.VERSION)
+                    statement.bindLong(4, asOfEpochMillis)
+                    statement.bindLong(5, asOfEpochMillis)
+                    statement.bindLong(6, asOfEpochMillis)
+                    statement.bindLong(7, limit.toLong())
                     buildList {
-                        while (statement.step()) add(
-                            EmbeddingPassageInput(
-                                rowId = statement.getLong(0),
-                                stableEvidenceKey = statement.getText(1),
-                                originalText = statement.getText(2)
-                            )
-                        )
+                        while (statement.step()) {
+                            val rowId = statement.getLong(0)
+                            val stableEvidenceKey = statement.getText(1)
+                            val originalText = statement.getText(2)
+                            val language = CorpusLanguage.fromCode(statement.getText(7))
+                                ?: throw IllegalArgumentException("Dense indexing encountered an unsupported passage language")
+                            require(stableEvidenceKey == EvidenceIdentity.stableKey(
+                                statement.getText(4), statement.getText(5), statement.getText(6), language
+                            )) { "Dense indexing rejected a passage with a changed stable evidence identity" }
+                            require(EvidenceIdentity.contentSha256(originalText) == statement.getText(3)) {
+                                "Dense indexing rejected a passage whose original-text hash changed after pack validation"
+                            }
+                            require(CorpusTextNormalizer.normalize(originalText).text == statement.getText(8)) {
+                                "Dense indexing rejected normalized text that changed after pack validation"
+                            }
+                            add(EmbeddingPassageInput(rowId, stableEvidenceKey, originalText))
+                        }
                     }
                 }
             }
@@ -267,6 +311,155 @@ class BundledSqliteCorpusIndex(
         }
     }
 
+    /**
+     * Checks eligibility using only stable keys and source metadata; original/normalized text is
+     * deliberately not selected while the dense retriever scans the complete vector generation.
+     */
+    override suspend fun readEligibleEvidenceKeysByStableKeys(
+        pack: app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord,
+        indexFile: File,
+        stableEvidenceKeys: List<String>,
+        filter: RetrievalFilter
+    ): Set<String> {
+        require(pack.status == app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord.STATUS_INSTALLED)
+        require(indexFile.isFile && stableEvidenceKeys.size <= 2048)
+        require(stableEvidenceKeys.all { it.matches(Regex("[a-f0-9]{64}")) })
+        require(filter.languages.isNotEmpty())
+        if (stableEvidenceKeys.isEmpty()) return emptySet()
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            open(indexFile).use { connection ->
+                connection.execSQL("PRAGMA query_only = ON")
+                val eligible = LinkedHashSet<String>(stableEvidenceKeys.size)
+                stableEvidenceKeys.distinct().chunked(MAX_EVIDENCE_LOOKUP_KEYS).forEach { keyBatch ->
+                    val keySql = keyBatch.joinToString(",") { "?" }
+                    val languageSql = filter.languages.joinToString(",") { "?" }
+                    val madhhabClause = if (filter.selectedMadhhab == null) "" else " AND p.madhhab_scope IN ('ALL','COMPARATIVE', ?)"
+                    val sql = """
+                        SELECT p.stable_evidence_key
+                        FROM passage p JOIN source s ON s.source_id = p.source_id
+                        WHERE p.stable_evidence_key IN ($keySql)
+                          AND s.license_status = 'CLEARED'
+                          AND trim(s.license_id) <> '' AND trim(s.rights_holder) <> ''
+                          AND s.license_verified_at_epoch_ms IS NOT NULL
+                          AND s.license_verified_at_epoch_ms > 0 AND s.license_verified_at_epoch_ms <= ?
+                          AND (s.license_expires_at_epoch_ms IS NULL OR s.license_expires_at_epoch_ms > ?)
+                          AND s.review_status = 'APPROVED'
+                          AND s.reviewer_id IS NOT NULL AND trim(s.reviewer_id) <> ''
+                          AND s.reviewed_at_epoch_ms IS NOT NULL
+                          AND s.reviewed_at_epoch_ms > 0 AND s.reviewed_at_epoch_ms <= ?
+                          AND length(s.provenance_sha256) = 64 AND s.provenance_sha256 NOT GLOB '*[^a-f0-9]*'
+                          AND p.language IN ($languageSql)
+                          $madhhabClause
+                        ORDER BY p.stable_evidence_key COLLATE BINARY ASC
+                    """.trimIndent()
+                    connection.prepare(sql).use { statement ->
+                        var bind = 1
+                        keyBatch.forEach { statement.bindText(bind++, it) }
+                        statement.bindLong(bind++, filter.asOfEpochMillis)
+                        statement.bindLong(bind++, filter.asOfEpochMillis)
+                        statement.bindLong(bind++, filter.asOfEpochMillis)
+                        filter.languages.map { it.code }.sorted().forEach { statement.bindText(bind++, it) }
+                        filter.selectedMadhhab?.let { statement.bindText(bind++, it.code) }
+                        while (statement.step()) {
+                            val key = statement.getText(0)
+                            check(eligible.add(key)) { "Corpus pack returned duplicate stable evidence keys" }
+                        }
+                    }
+                }
+                eligible
+            }
+        }
+    }
+
+    /**
+     * Resolves stored vector keys back to immutable source evidence. Queries are bounded to 400
+     * keys to stay below SQLite bind-variable limits on older supported Android versions.
+     */
+    override suspend fun readEvidenceByStableKeys(
+        pack: app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord,
+        indexFile: File,
+        stableEvidenceKeys: List<String>,
+        filter: RetrievalFilter
+    ): List<EvidencePassage> {
+        require(pack.status == app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord.STATUS_INSTALLED)
+        require(indexFile.isFile && stableEvidenceKeys.size <= 2048)
+        require(stableEvidenceKeys.all { it.matches(Regex("[a-f0-9]{64}")) })
+        require(filter.languages.isNotEmpty())
+        if (stableEvidenceKeys.isEmpty()) return emptyList()
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            open(indexFile).use { connection ->
+                connection.execSQL("PRAGMA query_only = ON")
+                val results = ArrayList<EvidencePassage>(stableEvidenceKeys.size)
+                stableEvidenceKeys.distinct().chunked(MAX_EVIDENCE_LOOKUP_KEYS).forEach { keyBatch ->
+                    val keySql = keyBatch.joinToString(",") { "?" }
+                    val languageSql = filter.languages.joinToString(",") { "?" }
+                    val madhhabClause = if (filter.selectedMadhhab == null) "" else " AND p.madhhab_scope IN ('ALL','COMPARATIVE', ?)"
+                    val sql = """
+                        SELECT p.passage_id, p.stable_evidence_key, p.source_id, p.locator, p.language,
+                               p.original_text, p.normalized_text, p.content_sha256, p.madhhab_scope, p.source_grade,
+                               s.source_type, s.title, s.author, s.publisher, s.edition_id, s.edition,
+                               s.rights_holder, s.license_id, s.license_url, s.license_status,
+                               s.license_verified_at_epoch_ms, s.license_expires_at_epoch_ms,
+                               s.review_status, s.reviewer_id, s.reviewed_at_epoch_ms, s.provenance_sha256
+                        FROM passage p JOIN source s ON s.source_id = p.source_id
+                        WHERE p.stable_evidence_key IN ($keySql)
+                          AND s.license_status = 'CLEARED'
+                          AND trim(s.license_id) <> ''
+                          AND trim(s.rights_holder) <> ''
+                          AND s.license_verified_at_epoch_ms IS NOT NULL
+                          AND s.license_verified_at_epoch_ms > 0
+                          AND s.license_verified_at_epoch_ms <= ?
+                          AND (s.license_expires_at_epoch_ms IS NULL OR s.license_expires_at_epoch_ms > ?)
+                          AND s.review_status = 'APPROVED'
+                          AND s.reviewer_id IS NOT NULL AND trim(s.reviewer_id) <> ''
+                          AND s.reviewed_at_epoch_ms IS NOT NULL
+                          AND s.reviewed_at_epoch_ms > 0
+                          AND s.reviewed_at_epoch_ms <= ?
+                          AND p.language IN ($languageSql)
+                          $madhhabClause
+                        ORDER BY p.stable_evidence_key COLLATE BINARY ASC, p.passage_id ASC
+                    """.trimIndent()
+                    connection.prepare(sql).use { statement ->
+                        var bind = 1
+                        keyBatch.forEach { statement.bindText(bind++, it) }
+                        statement.bindLong(bind++, filter.asOfEpochMillis)
+                        statement.bindLong(bind++, filter.asOfEpochMillis)
+                        statement.bindLong(bind++, filter.asOfEpochMillis)
+                        filter.languages.map { it.code }.sorted().forEach { statement.bindText(bind++, it) }
+                        filter.selectedMadhhab?.let { statement.bindText(bind++, it.code) }
+                        while (statement.step()) {
+                            val sourceType = CorpusSourceType.fromCode(statement.getText(10)) ?: continue
+                            val licenseState = LicenseState.entries.firstOrNull { it.code == statement.getText(19) } ?: continue
+                            val reviewState = ScholarlyReviewState.entries.firstOrNull { it.code == statement.getText(22) } ?: continue
+                            val language = CorpusLanguage.fromCode(statement.getText(4)) ?: continue
+                            val madhhab = MadhhabScope.fromCode(statement.getText(8)) ?: continue
+                            val source = CorpusSourceMetadata(
+                                sourceId = statement.getText(2), sourceType = sourceType, title = statement.getText(11),
+                                author = nullableText(statement, 12), publisher = nullableText(statement, 13),
+                                editionId = statement.getText(14), edition = statement.getText(15),
+                                rightsHolder = statement.getText(16), licenseId = statement.getText(17),
+                                licenseUrl = nullableText(statement, 18), licenseState = licenseState,
+                                licenseVerifiedAtEpochMillis = nullableLong(statement, 20),
+                                licenseExpiresAtEpochMillis = nullableLong(statement, 21),
+                                reviewState = reviewState, reviewerId = nullableText(statement, 23),
+                                reviewedAtEpochMillis = nullableLong(statement, 24), provenanceSha256 = statement.getText(25)
+                            )
+                            if (!EvidenceEligibility.isEligible(source, filter.asOfEpochMillis)) continue
+                            results += EvidencePassage(
+                                packId = pack.packId, packVersion = pack.version, passageId = statement.getText(0),
+                                stableEvidenceKey = statement.getText(1), source = source, locator = statement.getText(3),
+                                language = language, originalText = statement.getText(5), normalizedText = statement.getText(6),
+                                contentSha256 = statement.getText(7), madhhabScope = madhhab,
+                                sourceGrade = nullableText(statement, 9)
+                            )
+                        }
+                    }
+                }
+                results
+            }
+        }
+    }
+
     private fun open(file: File): SQLiteConnection = driver.open(file.absolutePath)
 
     private fun scalarLong(connection: SQLiteConnection, sql: String): Long = connection.prepare(sql).use { statement ->
@@ -296,4 +489,8 @@ class BundledSqliteCorpusIndex(
 
     private fun nullableText(statement: SQLiteStatement, index: Int): String? = if (statement.isNull(index)) null else statement.getText(index)
     private fun nullableLong(statement: SQLiteStatement, index: Int): Long? = if (statement.isNull(index)) null else statement.getLong(index)
+
+    private companion object {
+        const val MAX_EVIDENCE_LOOKUP_KEYS = 400
+    }
 }

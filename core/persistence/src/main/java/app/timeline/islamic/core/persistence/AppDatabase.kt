@@ -33,7 +33,7 @@ import androidx.room.RoomDatabase
         DenseIndexGenerationEntity::class,
         DenseIndexVectorEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

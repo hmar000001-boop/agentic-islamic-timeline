@@ -20,25 +20,37 @@ object QuantizedEmbeddingCodec {
         return QuantizedEmbeddingVector(values.size, encoded)
     }
 
-    /** Cosine score of a stored normalized int8 vector against a query vector. */
-    fun cosine(stored: QuantizedEmbeddingVector, query: FloatArray): Double {
-        require(stored.dimension == query.size) { "Query and index dimensions differ" }
-        var queryNormSquared = 0.0
-        query.forEach {
-            require(it.isFinite()) { "Query embedding contains a non-finite value" }
-            queryNormSquared += it.toDouble() * it.toDouble()
+    /** Normalize once per search, not once per stored row in an exhaustive scan. */
+    fun normalizeQuery(values: FloatArray): FloatArray {
+        require(values.size in 8..4096) { "Query dimension is outside the supported range" }
+        var normSquared = 0.0
+        values.forEach { value ->
+            require(value.isFinite()) { "Query embedding contains a non-finite value" }
+            normSquared += value.toDouble() * value.toDouble()
         }
-        require(queryNormSquared > 1e-18) { "Query embedding has zero magnitude" }
-        val queryNorm = sqrt(queryNormSquared)
+        require(normSquared > 1e-18) { "Query embedding has zero magnitude" }
+        val norm = sqrt(normSquared)
+        return FloatArray(values.size) { (values[it].toDouble() / norm).toFloat() }
+    }
+
+    /** Cosine score of a stored normalized int8 vector against a pre-normalized query vector. */
+    internal fun cosineWithNormalizedQuery(stored: QuantizedEmbeddingVector, normalizedQuery: FloatArray): Double {
+        require(stored.dimension == normalizedQuery.size) { "Query and index dimensions differ" }
         val values = stored.values
         var dot = 0.0
         var storedNormSquared = 0.0
         for (index in values.indices) {
             val value = values[index].toInt().toDouble()
-            dot += value * query[index].toDouble() / queryNorm
+            val queryValue = normalizedQuery[index].toDouble()
+            require(queryValue.isFinite()) { "Query embedding contains a non-finite value" }
+            dot += value * queryValue
             storedNormSquared += value * value
         }
         if (storedNormSquared == 0.0) return 0.0
         return (dot / sqrt(storedNormSquared)).coerceIn(-1.0, 1.0)
     }
+
+    /** Convenience form for tests and callers that do not scan multiple rows. */
+    fun cosine(stored: QuantizedEmbeddingVector, query: FloatArray): Double =
+        cosineWithNormalizedQuery(stored, normalizeQuery(query))
 }

@@ -3,6 +3,7 @@ package app.timeline.islamic.core.inference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class InferenceRuntimePolicyTest {
@@ -58,8 +59,19 @@ class InferenceRuntimePolicyTest {
             LiteRtEmbeddingTextModel.queryInput("x".repeat(LiteRtEmbeddingTextModel.MAX_INPUT_CHARACTERS))
                 .length - LiteRtEmbeddingTextModel.QUERY_PREFIX.length
         )
+        assertTrue(
+            LiteRtEmbeddingTextModel.documentInput("x".repeat(LiteRtEmbeddingTextModel.MAX_INPUT_CHARACTERS)).length <=
+                LiteRtEmbeddingTextModel.MAX_INPUT_TOKENS
+        )
+        assertTrue(
+            LiteRtEmbeddingTextModel.queryInput("x".repeat(LiteRtEmbeddingTextModel.MAX_INPUT_CHARACTERS)).length <=
+                LiteRtEmbeddingTextModel.MAX_INPUT_TOKENS
+        )
         assertThrows(IllegalArgumentException::class.java) {
             LiteRtEmbeddingTextModel.queryInput("x".repeat(LiteRtEmbeddingTextModel.MAX_INPUT_CHARACTERS + 1))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            LiteRtEmbeddingTextModel.documentInput("x".repeat(LiteRtEmbeddingTextModel.MAX_INPUT_CHARACTERS + 1))
         }
     }
 

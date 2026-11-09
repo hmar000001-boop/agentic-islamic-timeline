@@ -41,8 +41,8 @@ checks = [
      "AppDatabase public RoomDatabase supertype is explicit"),
     ('implementation(project(":core:persistence"))' in app_gradle,
      "app consumes the persistence module through its declared project dependency"),
-    ("versionCode = 23" in app_gradle and 'versionName = "0.6.2-phase5c-dense-retrieval"' in app_gradle,
-     "application version is bumped for Phase 5B LiteRT-LM runtime integration"),
+    ("versionCode = 24" in app_gradle and 'versionName = "0.6.3-phase5c-dense-retrieval"' in app_gradle,
+     "application version is 0.6.3 Phase 5C dense retrieval completion candidate"),
     ('implementation(project(":core:model-manager"))' in app_gradle and
      'implementation(project(":feature:model-management"))' in app_gradle and
      'implementation(project(":core:inference-runtime"))' in app_gradle,

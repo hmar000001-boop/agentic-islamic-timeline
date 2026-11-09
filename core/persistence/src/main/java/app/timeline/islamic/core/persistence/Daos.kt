@@ -192,6 +192,9 @@ import kotlinx.coroutines.flow.Flow
     @Query("SELECT * FROM dense_index_vector WHERE generationId = :generationId AND stableEvidenceKey IN (:keys)")
     suspend fun vectors(generationId: String, keys: List<String>): List<DenseIndexVectorEntity>
 
+    @Query("SELECT * FROM dense_index_vector WHERE generationId = :generationId AND stableEvidenceKey > :afterStableEvidenceKey ORDER BY stableEvidenceKey COLLATE BINARY ASC LIMIT :limit")
+    suspend fun vectorsPage(generationId: String, afterStableEvidenceKey: String, limit: Int): List<DenseIndexVectorEntity>
+
     @Query("SELECT COUNT(*) FROM dense_index_generation WHERE packId = :packId AND packVersion = :packVersion")
     suspend fun countPackGenerations(packId: String, packVersion: String): Int
 

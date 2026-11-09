@@ -8,10 +8,14 @@ ROOT = Path(__file__).resolve().parents[1]
 STORE = ROOT / "core/persistence/src/main/java/app/timeline/islamic/core/persistence/RoomDenseEmbeddingIndexStore.kt"
 API = ROOT / "core/knowledge-api/src/main/java/app/timeline/islamic/core/knowledge/CorpusContracts.kt"
 DAO = ROOT / "core/persistence/src/main/java/app/timeline/islamic/core/persistence/Daos.kt"
+DB = ROOT / "core/persistence/src/main/java/app/timeline/islamic/core/persistence/AppDatabase.kt"
+ENTITY = ROOT / "core/persistence/src/main/java/app/timeline/islamic/core/persistence/Entities.kt"
 
 store = STORE.read_text(encoding="utf-8")
 api = API.read_text(encoding="utf-8")
 dao = DAO.read_text(encoding="utf-8")
+db = DB.read_text(encoding="utf-8")
+entity = ENTITY.read_text(encoding="utf-8")
 
 checks = []
 checks.append((
@@ -45,6 +49,30 @@ checks.append((
 checks.append((
     "database.withTransaction" in store[store.find("override suspend fun activateGeneration"):store.find("override suspend fun abortGeneration")],
     "Generation activation remains one Room transaction"
+))
+checks.append((
+    re.search(r"version\s*=\s*6", db) is not None and
+    "corpusManifestSha256" in entity and "embeddingProfileSha256" in entity,
+    "Room v6 binds index generations to signed corpus and embedding profile fingerprints"
+))
+checks.append((
+    "corpusManifestSha256 = pack.manifestSha256" in store and
+    "embeddingProfileSha256 = model.embeddingProfileSha256" in store and
+    "it.corpusManifestSha256 == pack.manifestSha256" in store and
+    "it.embeddingProfileSha256 == model.embeddingProfileSha256" in store,
+    "Room adapter persists and requires exact generation fingerprints"
+))
+checks.append((
+    re.search(r"vectorsPage\(\s*generationId:\s*String,\s*afterStableEvidenceKey:\s*String,\s*limit:\s*Int", api) is not None and
+    re.search(r"override\s+suspend\s+fun\s+vectorsPage\(\s*generationId:\s*String,\s*afterStableEvidenceKey:\s*String,\s*limit:\s*Int\s*\)", store) is not None and
+    "ORDER BY stableEvidenceKey COLLATE BINARY ASC LIMIT :limit" in dao and
+    "MAX_PAGE_SIZE = 2048" in store,
+    "Room vector adapter exposes deterministic 2,048-row keyset pagination"
+))
+checks.append((
+    "MIGRATION_5_6" in (ROOT / "core/persistence/src/main/java/app/timeline/islamic/core/persistence/AppDatabaseMigrations.kt").read_text(encoding="utf-8") and
+    "AppDatabaseMigrations.MIGRATION_5_6" in (ROOT / "core/persistence/src/main/java/app/timeline/islamic/core/persistence/EncryptedDatabaseFactory.kt").read_text(encoding="utf-8"),
+    "Encrypted database factory registers the non-destructive v5→v6 invalidation migration"
 ))
 
 failed = 0

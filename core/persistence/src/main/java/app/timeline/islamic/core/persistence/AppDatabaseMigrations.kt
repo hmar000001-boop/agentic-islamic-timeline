@@ -32,4 +32,20 @@ object AppDatabaseMigrations {
             database.execSQL("CREATE INDEX IF NOT EXISTS index_dense_index_vector_generationId ON dense_index_vector(generationId)")
         }
     }
+
+    /**
+     * Phase 5C binds derived vectors to the exact signed corpus manifest and complete embedding
+     * profile. Existing v5 rows cannot prove either identity (they predate these fingerprints),
+     * so their derived vectors are deliberately discarded. Corpus packs, timeline, user data,
+     * permissions, approvals, audit records and all other tables remain untouched.
+     */
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE dense_index_generation ADD COLUMN corpusManifestSha256 TEXT NOT NULL DEFAULT ''")
+            database.execSQL("ALTER TABLE dense_index_generation ADD COLUMN embeddingProfileSha256 TEXT NOT NULL DEFAULT ''")
+            // Explicitly remove child rows before parents; do not depend on the caller's FK pragma.
+            database.execSQL("DELETE FROM dense_index_vector")
+            database.execSQL("DELETE FROM dense_index_generation")
+        }
+    }
 }

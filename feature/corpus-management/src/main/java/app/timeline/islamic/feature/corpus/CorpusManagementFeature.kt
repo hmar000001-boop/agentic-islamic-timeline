@@ -14,8 +14,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,10 +40,24 @@ data class CorpusPackUiItem(
     val version: String,
     val status: String,
     val licenseProfile: String,
-    val manifestSha256: String
+    val manifestSha256: String,
+    val denseIndexReady: Boolean = false,
+    val denseIndexVectorCount: Long = 0
 ) {
     val stableId: String get() = "$packId@$version"
 }
+
+data class CorpusSearchResultUiItem(
+    val stableEvidenceKey: String,
+    val sourceType: String,
+    val sourceTitle: String,
+    val edition: String,
+    val language: String,
+    val locator: String,
+    val originalText: String,
+    val rrfScore: Double,
+    val contributingChannels: List<String>
+)
 
 data class CorpusManagementUiState(
     val loading: Boolean = true,
@@ -53,7 +69,13 @@ data class CorpusManagementUiState(
     val packCount: Int = 0,
     val packs: List<CorpusPackUiItem> = emptyList(),
     val message: String? = null,
-    val lastRevalidationSummary: String? = null
+    val lastRevalidationSummary: String? = null,
+    val embeddingModelInstalled: Boolean = false,
+    val searchBusy: Boolean = false,
+    val searchMode: String? = null,
+    val searchDenseProviderFailed: Boolean = false,
+    val searchResults: List<CorpusSearchResultUiItem> = emptyList(),
+    val searchError: String? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,9 +87,12 @@ fun CorpusManagementFeature(
     onImportPublisherKeyring: () -> Unit,
     onImportPack: () -> Unit,
     onUpdatePack: (CorpusPackUiItem) -> Unit,
-    onRemovePack: (CorpusPackUiItem) -> Unit
+    onRemovePack: (CorpusPackUiItem) -> Unit,
+    onBuildDenseIndex: (CorpusPackUiItem) -> Unit,
+    onSearch: (String) -> Unit
 ) {
     var removalTarget by remember { mutableStateOf<CorpusPackUiItem?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(stringResource(R.string.corpus_title)) },
@@ -107,8 +132,63 @@ fun CorpusManagementFeature(
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(stringResource(R.string.corpus_index_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(stringResource(R.string.corpus_lexical_active), color = MaterialTheme.colorScheme.primary)
-                        Text(stringResource(R.string.corpus_embeddings_unavailable), style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(
+                            if (state.embeddingModelInstalled) R.string.corpus_embeddings_available
+                            else R.string.corpus_embeddings_unavailable
+                        ), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it.take(4096) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(stringResource(R.string.corpus_search_query)) },
+                            enabled = !state.busy && !state.searchBusy,
+                            maxLines = 3
+                        )
+                        Button(
+                            onClick = { onSearch(searchQuery) },
+                            enabled = !state.busy && !state.searchBusy && state.keyringReady && searchQuery.isNotBlank() && state.packs.any { it.status == "INSTALLED" }
+                        ) {
+                            if (state.searchBusy) CircularProgressIndicator()
+                            else Text(stringResource(R.string.corpus_search_action))
+                        }
+                        state.searchMode?.let { mode ->
+                            Text(
+                                stringResource(when (mode) {
+                                    "HYBRID_FUSION" -> R.string.corpus_search_mode_hybrid
+                                    "DENSE_ONLY" -> R.string.corpus_search_mode_dense
+                                    "LEXICAL_ONLY" -> R.string.corpus_search_mode_lexical
+                                    else -> R.string.corpus_search_mode_empty
+                                }), style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        if (state.searchDenseProviderFailed) {
+                            Text(stringResource(R.string.corpus_search_dense_failed), color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        state.searchError?.let {
+                            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (state.searchMode == "EMPTY" && !state.searchBusy) {
+                            Text(stringResource(R.string.corpus_search_empty), style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        state.searchResults.forEachIndexed { index, result ->
+                            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("${index + 1}. ${result.sourceTitle}", fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.corpus_search_result_metadata,
+                                    result.sourceType, result.edition, result.language, result.locator),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(result.originalText, style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(R.string.corpus_search_channels, result.contributingChannels.joinToString(", ")),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(stringResource(R.string.corpus_search_rrf_score, result.rrfScore),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                         Button(onClick = onImportPack, enabled = !state.busy && state.keyringReady) {
                             Text(stringResource(R.string.corpus_import_pack))
                         }
@@ -130,6 +210,10 @@ fun CorpusManagementFeature(
                             Text(stringResource(R.string.corpus_version_status, pack.version, pack.status))
                             Text(stringResource(R.string.corpus_license_profile, pack.licenseProfile), style = MaterialTheme.typography.bodySmall)
                             Text(stringResource(R.string.corpus_manifest_digest, pack.manifestSha256.take(16)), style = MaterialTheme.typography.labelSmall)
+                            if (pack.denseIndexReady) {
+                                Text(stringResource(R.string.corpus_dense_ready, pack.denseIndexVectorCount),
+                                    color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 OutlinedButton(
                                     onClick = { onUpdatePack(pack) },
@@ -137,6 +221,14 @@ fun CorpusManagementFeature(
                                 ) { Text(stringResource(R.string.corpus_update)) }
                                 TextButton(onClick = { removalTarget = pack }, enabled = !state.busy) {
                                     Text(stringResource(R.string.corpus_remove), color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                            if (pack.status == "INSTALLED") {
+                                OutlinedButton(
+                                    onClick = { onBuildDenseIndex(pack) },
+                                    enabled = !state.busy && state.keyringReady && state.embeddingModelInstalled
+                                ) {
+                                    Text(stringResource(if (pack.denseIndexReady) R.string.corpus_rebuild_dense_index else R.string.corpus_build_dense_index))
                                 }
                             }
                         }

@@ -1,3 +1,17 @@
+## 0.6.3-phase5c-dense-retrieval — 2026-11-09
+
+- Completed the Phase 5C source implementation on the recovered 0.6.2 baseline; incremented app versionCode to 24.
+- Added Room schema v6 and a non-destructive v5→v6 migration. The migration adds exact signed-manifest and embedding-profile fingerprints, and deletes only legacy derived dense rows that cannot prove compatibility. Timeline, task, approval, audit, publisher trust, corpus registry and all unrelated tables are preserved.
+- Made embedding identity canonical over model ID/revision/artifact SHA-256, dimension, max input, document/query task prefixes and normalization/quantization policy. Query and document embeddings use the runtime's separate asymmetric instructions.
+- Implemented the concrete SQLCipher Room dense retriever: 2,048-row stable-key pages, exhaustive exact cosine scoring, bounded top-K, generation count integrity check, cancellation checks and deterministic tie ordering.
+- Added metadata-only eligibility checks during the vector scan; full original passage text is loaded only for final top-K hits. The signed installed corpus pack remains the only evidence source; language, madhhab, license, scholarly-review, expiry, stable key and content/normalization checks remain authoritative.
+- Wired dense retrieval into `TimelineApplication.retrieveCorpus()` and the corpus-management screen. FTS5 lexical results remain active and fuse through existing RRF; missing model/index or dense runtime/integrity/preflight failures are explicitly traced while lexical retrieval remains available. RRF is not presented as probability/confidence.
+- Added per-pack manual dense-index build/rebuild and search UI, with source/edition/locator/language and contributing-channel provenance. UI search requires a verified publisher keyring. Dense work respects memory/thermal preflight and does not silently unload an active generation model.
+- Added focused cosine/pagination/fingerprint/filter/count/hybrid/top-K hydration tests, SQLCipher v5→v6 migration instrumentation and bundled-SQLite evidence-lookup/index-source instrumentation. The local Kotlin/JVM harness compiled the production retrieval and index-builder sources and passed 18/18 tests. A separate API-shaped LiteRT-LM adapter harness compiled the production EmbeddingGemma adapter and passed 11/11 policy tests. Static Phase 5C contracts pass 33/33; Room schema/migration guard and persistence contracts pass 12/12.
+- Index-source hardening: only currently licensed, unexpired, scholarly-approved, provenance-shaped passages within the model input budget enter embedding. Before embedding, the source verifies the stable evidence key, original-text SHA-256 and normalized text against the signed SQLite rows. Invalid or changed source data aborts the staging generation; it cannot be silently embedded.
+- EmbeddingGemma's 8,192-token native limit is distinct from the raw character budget. The latter reserves the 28-character document prefix, resulting in an 8,164-character passage/query payload cap; the adapter tests that neither prefixed string exceeds the 8,192-character input envelope.
+- **Not yet certified:** actual Gradle/KSP/Compose compilation, hosted CI unit/lint, API 36 SQLCipher/bundled-SQLite instrumentation and Galaxy S24 FE native EmbeddingGemma loading/latency/RAM/thermal benchmarks. These remain required before marking Phase 5C accepted or production-ready.
+
 ## 0.6.2 CI hotfix — Android public directory-sync API (2026-11-09)
 
 - Fixed the hosted Kotlin compilation error in `AndroidModelFileStore.kt`: `android.system.OsConstants.O_DIRECTORY` is not part of the public Android SDK API and therefore cannot be referenced by an ordinary application module.
@@ -8,16 +22,10 @@
 - Local validation: the exact production Kotlin file compiles against a minimal public-API-shaped Android `Os` shim and a filesystem harness completed prepare/commit/removal with eight directory fsyncs and matching descriptor closes; the static contract passed. Actual Android Gradle/KSP compile and API 36 instrumentation must be rerun in GitHub Actions.
 - App version metadata remains `0.6.2-phase5c-dense-retrieval` / versionCode 23 because this is a CI/build-compatibility correction to the same Phase 5C source baseline, not a new feature release.
 
-## 0.6.2-phase5c-dense-retrieval — 2026-11-09
+## 0.6.2-phase5c-dense-retrieval — 2026-11-09 (recovered-source status correction)
 
-- Continued from 0.6.1 without replacing Phases 0–5B. Connected local EmbeddingGemma query vectors to an exact cosine search over the existing SQLCipher Room dense index and wired it into `TimelineApplication.retrieveCorpus()` / `LocalCorpusRetriever` with the existing FTS5/RRF lexical channel retained as fallback.
-- Added `LocalTextEmbeddingQueryModel` and mandatory generation fingerprints for corpus manifest SHA-256, model artifact SHA-256/revision, dimension and embedding profile. A model hash by itself cannot authorize vector reuse.
-- Bumped Room to schema v6 with migration 5→6. V5 vectors/generations are removed because they cannot prove the corpus manifest or preprocessing profile; the migration preserves corpus packs, FTS5, publisher trust/keyring, authorization, user data and all unrelated tables.
-- Added bounded 2,048-row stable-key pagination, a bounded top-k heap, exact cosine scoring, generation recheck after scanning, metadata-only scoring and original source text loading only for final top-k. The final citation evidence is revalidated against stable key, passage/content hashes, normalizer output, source identity, license/review, language and madhhab.
-- Dense document indexing now reads only passages whose license is CLEARED, not expired and verified, and whose scholarly review is APPROVED. Noneligible rows are skipped at retrieval; malformed/missing evidence fails the dense channel closed.
-- Any missing model/generation, fingerprint mismatch, runtime error or index-integrity failure continues through the existing FTS5/RRF path. RRF is still explicitly not a probability/confidence score.
-- Added 19 Phase 5C source/SQLite migration contracts, additional Room profile/paging instrumentation assertions, a hybrid fusion regression test and cosine validation tests. Standalone Kotlin harness: 23/23 retrieval tests pass.
-- Bumped app versionCode to 23 and versionName to `0.6.2-phase5c-dense-retrieval`. Actual Android Gradle/KSP build, SQLCipher API 36 connected instrumentation, native model load/query performance and Galaxy S24 FE testing remain hosted/device validation gates.
+- This version's original checkpoint notes claimed the dense path, Room v6 migration and app wiring were complete. A subsequent code-level audit of the recoverable 0.6.2 archive did **not** substantiate those claims: the recovered `AppDatabase` remained v5, no `MIGRATION_5_6` was registered, and no concrete dense retriever was connected to the application. The archive provenance also indicates a reconstruction rather than a certified copy of the user's exact Git checkout.
+- Therefore, treat recovered 0.6.2 as the Phase 5B/runtime and Android directory-sync hotfix baseline, not as an accepted Phase 5C release. The actual source implementation of dense retrieval is delivered by 0.6.3 below; acceptance still requires hosted Android CI and device validation.
 
 ## 0.6.1-phase5b-litertlm-runtime — 2026-11-09
 

@@ -1,23 +1,25 @@
 # Timeline Agentique
 
-**Current source:** `0.6.2-phase5c-dense-retrieval` (versionCode 23)
-**Current phase:** Phase 5C — fingerprinted local dense retrieval integrated with encrypted Room vectors and FTS5/RRF fallback; hosted/device validation pending.
+**Current source:** `0.6.3-phase5c-dense-retrieval` (versionCode 24)
+**Current phase:** Phase 5C implementation candidate complete in source; hosted Android CI, SQLCipher instrumentation and Galaxy S24 FE acceptance remain open. Phase 6 is next after these Phase 5C acceptance gates.
 **Previous baseline:** Phase 0–4 implementation from 0.5.16; preserved incrementally.
 
 ### 0.6.2 CI hotfix — Android directory fsync API
 
 The first hosted Phase 5C unit-test build reached `:core:model-manager:compileDebugKotlin` and failed because `OsConstants.O_DIRECTORY` is not exported by Android's public SDK. The directory-sync code now opens with public `O_RDONLY`, verifies the directory path and opened descriptor with `lstat`/`fstat` and `S_ISDIR`, checks device/inode identity, then retains `fsync` and guaranteed close. A separate CI contract rejects hidden constants and missing durability checks. See `docs/reports/PHASE5C_CI_HOTFIX_ANDROID_DIRECTORY_SYNC_2026-11-09.md`.
 
-## Phase 5C — local dense retrieval (0.6.2)
+## Phase 5C — dense retrieval completion candidate (0.6.3)
 
 - Connects the verified LiteRT-LM EmbeddingGemma 2 query adapter to the existing SQLCipher Room dense-index store and `LocalCorpusRetriever`; FTS5/RRF remains active and is not removed or replaced.
 - Dense generations are bound to the exact corpus manifest SHA-256, model artifact SHA-256, model revision, output dimension and an explicit embedding preprocessing profile. A model/hash match alone is insufficient.
 - Room schema is now v6 (27 entities). Migration 5→6 adds the corpus-manifest and embedding-profile columns and invalidates all v5 dense generations/vectors because they lack those compatibility fingerprints. Signed corpus packs, FTS5 tables, authorization, user data and publisher trust state are preserved.
-- Index building reads only currently cleared, unexpired, reviewed corpus passages and stores only quantized vectors plus stable evidence keys in encrypted Room. The vector rows contain no source text.
-- Query scanning is exact cosine over stable-key ordered pages (2,048 vectors/page) with a bounded top-k heap. It reads lightweight metadata while scoring and loads original citation-bearing source text only for the final top-k; hashes, normalizer output, pack identity, language and madhhab are rechecked before return.
+- Index building reads only currently cleared, unexpired, reviewed corpus passages within the model's pre-prefix character budget. Before embedding, the SQLite source rechecks each passage's stable evidence identity, original-text SHA-256 and canonical normalized text; it stores only quantized vectors plus stable evidence keys in encrypted Room. The vector rows contain no source text.
+- Query scanning is exact cosine over stable-key ordered pages (2,048 vectors/page) with a bounded top-k heap. It reads only eligible stable keys while scoring and loads original citation-bearing source text only for the final top-k; hashes, normalizer output, pack identity, language and madhhab are rechecked before return.
 - Dense search is available only when the exact installed EmbeddingGemma artifact and an ACTIVE generation match all fingerprints. No model, no compatible generation or any dense integrity/runtime failure leaves FTS5/RRF available. RRF remains a ranking utility, not a confidence/probability score.
-- Query embeddings are normalized once before vector scanning; only cleared, approved, in-date sources are scored. Out-of-scope language/madhhab rows and currently ineligible sources are skipped, while malformed/missing provenance fails the dense channel closed.
-- CI includes a Phase 5C source/SQLite migration contract and existing retrieval unit and Room connected instrumentation tasks. This environment executed the actual retrieval Kotlin sources/tests with a local harness (23/23); hosted Android Gradle/KSP/SQLCipher instrumentation and Galaxy S24 FE benchmarks still remain required.
+- Query embeddings are normalized once per request before the vector scan; only cleared, approved, in-date sources are scored. Out-of-scope language/madhhab rows and currently ineligible sources are skipped, while malformed/missing provenance fails the dense channel closed.
+- The corpus screen exposes explicit per-pack dense-index build/rebuild and local evidence search, displaying original source passage, locator, edition, language, contributing channels and a clearly non-probabilistic RRF ranking score. Search is disabled until a verified publisher keyring is ready.
+- Dense search respects generation runtime lifecycle and RAM/storage/thermal preflight. It never silently unloads a user-loaded generation model; lexical FTS5 remains available when dense inference is blocked.
+- A standalone Kotlin/JVM harness compiled the production retrieval and index-builder sources and executed 18 focused unit tests (18/18). A separate harness compiled the production EmbeddingGemma adapter against API-shaped LiteRT-LM stubs and passed 11/11 inference policy tests. Static Phase 5C source contracts pass 33/33; Room migration/schema guard and persistence contracts pass 12/12. These checks do not substitute for Gradle/KSP/Compose, real SQLCipher or API 36 connected tests.
 
 ## Phase 5B — LiteRT-LM runtime (0.6.1)
 
@@ -25,9 +27,9 @@ The first hosted Phase 5C unit-test build reached `:core:model-manager:compileDe
 - `:core:inference-runtime` isolates native inference from the app and Model Manager. The app still targets Java 17 bytecode; the CI Gradle JVM uses JDK 21 for the runtime artifact family.
 - Text generation loads only a verified catalog-installed Gemma 4 artifact, uses LiteRT-LM CPU backend, one single-thread native owner, a bounded 4,096-token KV cache, per-request output cap, one-shot conversations and cancellation/close handling.
 - No tools are registered and `automaticToolCalling=false`; model-emitted tool calls are rejected. State-changing actions are not exposed through this runtime.
-- EmbeddingGemma 2 uses the LiteRT-LM retrieval prefixes (`task: search result | text:` for indexed text and `task: search query | text:` for queries), batches of at most 24, max 8,192 input tokens/characters, 768-dimensional normalized vectors and strict finite/norm validation.
+- EmbeddingGemma 2 uses the LiteRT-LM retrieval prefixes (`task: search result | text:` for indexed text and `task: search query | text:` for queries), batches of at most 24 and normalized 768-dimensional vectors. The native engine input is capped at 8,192 tokens; the raw text character budget reserves room for the longest task prefix (8,164 characters), with runtime tokenization still enforcing the native token cap.
 - The Models screen exposes explicit CPU load, runtime smoke test and unload. Generation and embedding engines are serialized so two large model weights are not held resident together.
-- No Internet permission, model download path, cloud inference, GPU/NPU backend or change to Room schema v5 was added. The lexical FTS5/RRF path remains authoritative until embedding compatibility tests and a complete dense-index query route are validated.
+- No Internet permission, model download path, cloud inference or GPU/NPU backend was added. Phase 5C advances Room from v5 to v6 with exact corpus/model fingerprints; lexical FTS5/RRF remains the fallback when dense retrieval is unavailable.
 - CI now runs inference-runtime JVM tests, API 36 API-shape instrumentation, lint and the static Phase 5B contract. Hosted Gradle/native validation and Galaxy S24 FE measurements are still required.
 
 ## Phase 5A — implemented foundation
@@ -47,202 +49,15 @@ The first hosted Phase 5C unit-test build reached `:core:model-manager:compileDe
 - Gemma 4 E2B/E4B load through the CPU backend only, with a 4-thread owner dispatcher, 4,096-token KV cache, bounded prompt/output, per-request conversation and explicit cancellation/unload. No tool provider is registered and automatic tool calling remains disabled.
 - EmbeddingGemma 2 implements the Phase 4 `LocalTextEmbeddingModel` contract with LiteRT-LM's asymmetric search-result/search-query prefixes, max batch 24, requested normalized 768-d vectors and strict finite/dimension/norm checks.
 - `TimelineApplication` exposes explicit model loading, smoke test, unload, dense-index construction and one-off query embedding service methods. Generation and embedding are serialized so two multi-GB model engines are not resident together.
-- In the 0.6.1 Phase 5B baseline, FTS5/RRF was the only active retrieval route. Phase 5C (0.6.2) now adds an optional, fingerprint-checked dense channel; FTS5 continues to run and remains the fallback.
+- In the 0.6.1 Phase 5B baseline, FTS5/RRF was the only active retrieval route. Phase 5C (0.6.3) now adds an optional, fingerprint-checked dense channel; FTS5 continues to run and remains the fallback.
 - Phase 5B CI now includes inference unit tests, API-shape instrumentation, lint and static checks, but this authoring environment cannot execute the real Gradle/Android SDK/native runtime build. The first hosted CI run for 0.6.1 and an actual Galaxy S24 FE model-load/performance run are still required.
 
-## Phase 5D — next
+## Next development stages
 
-- Validate the Phase 5B native runtime and Phase 5C query/index path on hosted API 36 and the Galaxy S24 FE, including E2B and EmbeddingGemma; determine whether E4B is practical under sustained RAM/thermal budgets.
-- Add upstream/model-revision-specific golden embedding vectors and evaluate Arabic/English retrieval quality, hybrid RRF ranking and latency using licensed/approved evaluation corpora.
-- Integrate generation into the agent proposal pipeline as a text-only component that cannot execute tools or commit state changes; preserve evidence provenance and explicit user approval.
-- Add offline OCR and speech only after runtime, model, license and device resource profiles are pinned.
+- Phase 6 follows Phase 5C after hosted CI and device acceptance. It will implement the user-visible Islamic domain engines (prayer, Hifz, halal, zakat, inheritance, travel and community) on top of evidence-first retrieval, with scholarly and corpus eligibility checks.
+- After Phase 6, a dedicated completion pass will revisit every earlier phase against its original acceptance criteria, close the remaining authorization, workflow, accessibility, localization, resilience and validation gaps, and only then begin Phase 7 release hardening.
+- Earlier Phase 5D ideas (agent proposal-generation wiring, optional OCR/audio and model quality evaluation) remain separate follow-up work; they are not silently represented as complete by Phase 5C.
 
-## Phase 5C — implemented dense retrieval integration; hosted/device validation pending
+## Phase 5C implementation and acceptance boundary
 
-Phase 5C connects the real 768-dimensional local EmbeddingGemma query adapter to `LocalDenseIndexSearcher`, which reads active vectors from encrypted Room in bounded stable-key pages, computes exact cosine similarity, resolves source metadata from the installed signed SQLite pack and loads original source text only for top-k results. Dense results flow through the existing independent-channel RRF fusion with FTS5. The v5→v6 Room migration adds mandatory corpus-manifest and embedding-profile fingerprints and deletes only legacy derived vector data that cannot be proven compatible. The app's `retrieveCorpus()` service uses dense search only for an exact installed model plus matching active generation; any absence/error falls back to lexical retrieval. The authoring environment ran the actual retrieval Kotlin unit sources in a local harness (23/23) and static/SQLite migration contracts, but could not run the Android Gradle/KSP build or actual SQLCipher/Android connected tests. Do not claim API 36 or Galaxy S24 FE runtime validation for 0.6.2 until GitHub Actions and device tests pass.
-
-## Validation boundaries
-
-Phase 4 CI was reported green by the user on 2026-11-09 for the 0.5.16 baseline. Phase 5A (0.6.0) adds the offline Model Manager, pinned catalog, SAF import, durable ownership markers and recovery. Phase 5B (0.6.1) adds pinned LiteRT-LM 0.19.1 CPU generation and EmbeddingGemma adapters; the generator exposes no tools and cannot bypass `ToolExecutionGateway`. Phase 5C (0.6.2) connects query embeddings to fingerprinted dense retrieval inside SQLCipher Room, using exact cosine search and FTS5/RRF fallback. The v5→v6 migration drops only legacy derived vectors whose corpus/model/preprocessing fingerprints were not recorded. This authoring environment ran 23 retrieval unit tests with the actual retrieval Kotlin source plus static and SQLite migration contracts, but has no Android SDK/KVM emulator and cannot run Gradle 9.5.0/AGP/KSP/Compose or real SQLCipher Android instrumentation. Phase 5B native AAR/model initialization, Phase 5C connected database migration/query, and Galaxy S24 FE RAM/thermal/latency validation still require GitHub Actions and device testing. Model weight files remain in app-private no-backup storage and are not individually SQLCipher-encrypted. OCR/audio, agent proposal-generation wiring and production corpus rights/scholarly approvals remain open. The application is not production-ready.
-
-## Existing product and security constraints
-
-- Android-native Kotlin/Compose application; offline-first; no mandatory cloud inference, backend, accounts, telemetry, advertising, in-app purchases or subscriptions.
-- Arabic and English launch resources; Sunni scope across the four madhhabs with no default madhhab.
-- Corpus evidence remains source-first and subject to licensing, scholarly review, provenance and publisher trust gates.
-- State-changing agent actions remain subject to the existing authorization gateway and explicit approval policy.
-- `minSdk 26`, `targetSdk 36`, compile SDK 37.0, Java 17 bytecode and API 36 emulator CI remain unchanged.
-
-## 0.5.16 CI correction — revoked scoped-grant recovery assertions
-
-The 0.5.15 run compiled and packaged every instrumentation target, booted the API 36 AVD, and executed all test suites. Only `AgentAuthorizationRoomTest.revokedScopedGrantIsRecheckedAtExecutorStart` failed: its first recovery call expected `0`, then the same unchanged claim was expected to remain `CLAIMED` so a second recovery call could return `1`. The recovery implementation intentionally aborts `CLAIMED` executions on the first process-startup pass because no external handler has run before the atomic `EXECUTING` transition. The test is corrected to expect exactly one abort followed by an idempotent zero. It now exercises `ToolExecutionGateway` and proves the fake external handler is never invoked after grant revocation, the execution/outbox never become `EXECUTING`, no executor-start audit/task event is written, and recovery aborts the claim, interrupts the task, expires the lease and is idempotent. Production authorization/recovery behavior is unchanged.
-
-**Version:** `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`
-
-## 0.5.15 CI correction — persistence instrumentation test classpath
-
-The hosted API 36 emulator now passes startup and Gradle reaches Android-test Kotlin compilation. The persistence instrumentation source set exposed two compile-time defects: `AgentAuthorizationRoomTest` imports `AuthorizationEngine` but the persistence module had not declared `:core:authorization` on its Android-test classpath, and `RoomAuditLogTest` referenced a `context` local that existed only inside `setUp`. The authorization module is now an `androidTestImplementation` dependency only, and the Android `Context` is held as a fixture property initialized in `setUp`. No production dependency edge, runtime behavior, Room schema, encryption, corpus, or retrieval behavior changes. CI runs a dedicated source-set contract check before Gradle.
-
-**Version:** `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`
-
-## 0.5.14 CI correction — unify API 36 AVD creation and lookup paths
-
-The latest hosted run passed the headless QEMU dependency preflight and started the Android Emulator launcher, but the emulator could not find `timeline-ci-api36.ini` under `$HOME/.android/avd`. The startup script now pins `ANDROID_USER_HOME`, `ANDROID_EMULATOR_HOME`, `ANDROID_AVD_HOME`, and the legacy `ANDROID_SDK_HOME` to compatible locations, removes an inherited conflicting `ANDROID_PREFS_ROOT`, and passes an explicit `--path` for the AVD data directory. After `avdmanager` exits, startup verifies both the root `.ini` registration and the AVD `config.ini` before launching the emulator. The regression suite checks conflicting inherited runner variables and that `avdmanager` and the emulator receive the same canonical paths. Real hosted AVD creation, guest boot, and instrumentation still require Actions confirmation.
-
-## 0.5.13 CI correction — select the actual headless QEMU backend
-
-The API 36 job launches the emulator with `-no-window`, which the Android Emulator launcher treats as headless mode. The launcher therefore selects `qemu-system-x86_64-headless`, not the GUI `qemu-system-x86_64` binary. The 0.5.12 preflight inspected the wrong binary and ran `ldd` without the SDK's bundled library search paths, so it reported SDK-owned Qt/Android-emulator libraries as missing. The preflight now checks the headless binary and mirrors the launcher's `lib64`, SwiftShader GLES, Vulkan and bundled `libstdc++` search directories. Genuine missing host dependencies still fail fast. The API 36 regression suite passes 9/9 locally; actual GitHub-hosted QEMU launch, API 36 guest boot and connected instrumentation still require Actions confirmation.
-
-## 0.5.12 CI correction — initial API 36 QEMU host library preflight
-
-The latest hosted emulator step reached the Android Emulator launcher, but QEMU could not load `libpulse.so.0` and exited with code 127 before an Android guest started. The Ubuntu runner now installs the `libpulse0` client runtime package; no PulseAudio server or app audio feature is installed. Before creating the AVD, the startup script checks the x86_64 QEMU binary with `ldd` and fails with the exact unresolved library names if host dependencies are missing. Tests cover the workflow package install, missing-library preflight, and successful mock startup. Real hosted API 36 boot and connected instrumentation still require Actions verification.
-
-## 0.5.10 CI correction — API 36 emulator test fixtures
-
-The next GitHub Actions run exposed two failures in the emulator setup regression tests, not in the emulator startup path itself. The missing-ADB test inherited the runner's valid job-level `ADB` override, so it reached a later missing-emulator check. It now explicitly points to the missing `platform-tools/adb` path in its temporary SDK. The successful-startup fake emulator had exited immediately; it now remains alive while ADB reports a booted device and is terminated in a `finally` cleanup path. Production early-exit detection and boot deadlines remain intact. The regression suite passes 6/6 locally; a hosted run must still verify real API 36 boot and instrumentation.
-
-## 0.5.9 CI correction — API 36 emulator adb discovery
-
-
-The supplied hosted-runner log showed that SDK Manager completed but the next step failed at bare `adb wait-for-device` with `adb: command not found` (exit 127). CI now verifies `$ANDROID_HOME/platform-tools/adb`, exports `platform-tools` through `GITHUB_PATH`, and passes the explicit executable to a dedicated API 36 startup script. That script uses bounded waits for device registration and Android boot, and prints the device list and emulator log tail if startup fails. This corrects the tool lookup failure; a subsequent hosted run must still confirm that the emulator boots and the instrumentation suite runs.
-
-## 0.5.8 CI correction — English resource lint completeness
-
-The last hosted run successfully assembled `:app:assembleOfflineSideloadDebug` and passed lint for `core:corpus`, `core:retrieval`, and `feature:corpus-management`. App lint then reported three `MissingTranslation` errors: `app_nav_timeline`, `app_nav_canvas`, and `app_nav_corpus` existed in default and Arabic resources but were absent from the app's explicit `values-en/strings.xml`. All three English entries are now present. The corpus-management feature also now has an explicit English resource file matching its default English set. CI runs translation parity tests and a verifier before Gradle, checking both locale key sets and format placeholders without disabling lint.
-
-# Timeline Agentique
-
-**Version:** `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`
-
-## 0.5.7 CI correction — app compile classpath and symbols
-
-The latest hosted build passed `:core:persistence:compileDebugKotlin`, Room KSP and persistence unit tests, then exposed app-source compile errors. `MainActivity` no longer imports the `ColumnScope`-member `weight` extension as a top-level symbol; `TimelineApplication` imports `TaskLease` and `ExecutionClaimResult` from `core.agent`; and persistence now exports Room runtime as an API dependency because the public `AppDatabase` type extends `RoomDatabase`. CI runs `scripts/verify-app-module-compile-contract.py` before Gradle. Re-run hosted app compilation to validate the fix.
-
-## 0.5.6 CI correction — Room dense-index adapter compile contract
-
-The next hosted Gradle run passed the API 37.0 SDK verifier, AGP built-in Kotlin configuration, AAR metadata checks, all listed core/feature production compilation except `:core:persistence`, KSP startup, and the previously failing `:core:retrieval` unit tests. Compilation then exposed two errors in `RoomDenseEmbeddingIndexStore`: the expression-bodied `activateGeneration` leaked the DAO's `Int` return value despite the interface requiring `Unit`, and `vectorsFor` referenced an undeclared `STATE_ACTIVE`. The adapter now uses a block-bodied `Unit` override while keeping the complete retire/activate/delete sequence inside the same Room transaction, and defines `STATE_ACTIVE = "ACTIVE"` to match the DAO predicates. CI runs `scripts/verify-room-dense-index-contract.py`; the existing Room instrumentation test exercises activation, replacement and recovery.
-
-## 0.5.5 CI correction — non-empty corpus-index test fixtures
-
-The GitHub Actions run now gets through SDK installation, AGP configuration, Kotlin compilation and into the unit tests. Three failures were isolated to `LocalEmbeddingIndexBuilderTest`: its tests used zero-byte temporary `.sqlite` files, while the production builder intentionally rejects an empty corpus index before creating a staging generation. Tests now write an explicit fixture placeholder for their in-memory source; the empty-file rejection itself has its own regression test. Production validation remains strict.
-
-## 0.5.4 CI correction — parse the real Android SDK Platform 37.0 metadata
-
-The installed Platform 37.0 package reports `AndroidVersion.ApiLevel=37.0` (a dotted value) in `source.properties`; it does not report `AndroidVersion.ApiLevel=37` plus `AndroidVersion.MinorApiLevel=0`. The pre-Gradle verifier now parses and normalizes both representations, accepts exactly major 37/minor 0, rejects mismatched or conflicting values, and retains the `android.jar`, directory-boundary, and package-name checks. Ten regression tests include the exact metadata emitted by the runner.
-
-## 0.5.3 CI correction — Android SDK Platform 37.0
-
-Android SDK Platform 37 is published by the SDK Manager as `platforms;android-37.0`, not `platforms;android-37`. CI installs the exact `37.0` package and verifies `android.jar` plus `source.properties` before Gradle starts. Every Android module uses AGP's typed `compileSdk { version = release(37) { minorApiLevel = 0 } }` DSL, so Gradle resolves the correct platform identity without a filesystem alias. The app remains `targetSdk 36`; the CI runtime emulator remains API 36.
-
-`python3 scripts/test-android-sdk-platform.py` tests the validator against missing, wrong-version, incomplete and symlink-escape SDK layouts. `scripts/verify-android-sdk-platform.py` checks the real installed SDK in CI.
-
-## 0.5.2 CI correction — Compose API 37
-
-The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artifacts require `compileSdk 37`. All 18 Android modules now compile against API 37.0. The app's `targetSdk` remains 36 and CI keeps the API 36 emulator for runtime compatibility tests; compile SDK and target SDK serve different purposes. CI installs Android SDK Platforms 36 and 37.0.
-
-`python3 scripts/verify-compose-compile-sdk.py` checks this split and is executed by GitHub Actions.
-
-# Timeline agentique — Android source foundation (Phases 1–4C)
-
-**Historical Phase 4 baseline:** `0.5.16-phase4c-revoked-grant-reconciliation-test-fix`
-**Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
-**Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
-**Package ID:** provisional `app.timeline.islamic`
-**Status:** incremental implementation source; not a production release.
-
-## 0.5.1 CI correction
-
-The first real AGP 9.3.1 Kotlin DSL configuration attempt found that the public `Variant.buildConfigFields` API is nullable. The app keeps `android.buildFeatures.buildConfig = true` and now checks the property with `checkNotNull` before registering the two publisher-root BuildConfig values. This fails explicitly if BuildConfig generation is unavailable instead of silently omitting trust configuration. The correction is covered by the built-in Kotlin/AGP verification scripts.
-
-The authoring environment still has no installed Gradle distribution or Android SDK, so the actual AGP/KGP/KSP build remains pending the next GitHub Actions run.
-
-## What is in this source archive
-
-- The original Android application and all prior Timeline, Canvas, task runtime, authorization, encrypted persistence, corpus, publisher-trust and retrieval work are preserved. This is not a replacement project.
-- Eighteen Gradle modules: `app`; twelve core modules (`common`, `timeline-api`, `agent-api`, `authorization`, `agent-runtime`, `security`, `localization`, `persistence`, `knowledge-api`, `corpus`, `retrieval`, `model-manager`, `inference-runtime`); and four feature modules (`timeline`, `canvas`, `corpus-management`, `model-management`).
-- Android min API 26, compile API 37 / target API 36, Java 17 bytecode target. Offline sideload and Play-distribution flavors both currently have no INTERNET permission; Play AI Delivery is not integrated.
-- SQLCipher-protected Room schema v5 with 27 registered entities and explicit migrations 1→2→3→4→5. Keystore-wrapped random database key, fail-closed recovery, no plaintext fallback.
-- Existing daily Timeline, task/habit entry and completion, Canvas create/edit/archive/snapshots, Arabic/English resource sets and RTL-capable layouts.
-- Phase 3 persistent one-step agent runtime, owner/fencing-token leases, approvals, narrowly scoped Hifz interval grant, execution gateway, crash reconciliation and Keystore HMAC audit chain. No production OS action adapter is registered by this source tranche.
-- Phase 4A signed Corpus Pack v1, canonical Ed25519 manifest, immutable original evidence text, source/edition/provenance/licensing/review metadata, Arabic/English normalization, four-madhhab selection with no default madhhab, SQLite FTS5/BM25 lexical retrieval, rank-only RRF and eligibility/citation rechecks.
-- Phase 4B root-signed publisher keyring, monotonic encrypted Room persistence, SAF import/update, pack lifecycle, startup revalidation, quarantine/restore, removal recovery and path/symlink protections.
-- Phase 4C corpus-management screen connected to Timeline app navigation; user-driven SAF selection for keyring and packs; signed keyring/pack lifecycle operations; explicit update/removal confirmation; status visibility and startup revalidation.
-- Phase 4C bounded local embedding-index construction contract. It streams installed passages in small batches, quantizes normalized vectors to int8, stages and atomically publishes generations, and stores vectors only inside the SQLCipher-protected Room database. Per-generation payload is capped at 128 MiB; total active/staging vector payload is capped at 256 MiB. Inactive/quarantined/superseded packs have their dense generations removed.
-- Phase 5A model management lists three immutable LiteRT-LM artifacts and supports user-selected SAF import, but imports do not activate inference. Dense retrieval remains disabled until a separately reviewed on-device embedding runtime is integrated and validated. There is no fake embedder, fabricated vector model, bundled model weights or remote embedding provider. FTS5 remains the functioning retrieval path.
-
-## Toolchain and AGP 9+ migration
-
-| Component | Version | Configuration |
-|---|---:|---|
-| Android Gradle Plugin | 9.3.1 | Built-in Kotlin and public typed Android DSL |
-| Gradle distribution | 9.5.0 | Custom checksum-verifying bootstrap (`gradlew`) |
-| Kotlin compiler | 2.4.21 | AGP built-in Kotlin; no `org.jetbrains.kotlin.android` plugin |
-| KSP | 2.3.13 | Pinned processor plugin for Room code generation |
-| Compose compiler plugin | 2.4.21 | Same Kotlin compiler release |
-| Compose BOM | 2026.09.00 | Exact catalog pin |
-| Room | 2.8.5 | KSP processor |
-| SQLCipher Android | 4.20.0 | Room encrypted helper; device validation required |
-| AndroidX SQLite | 2.7.1 | Bundled SQLite/FTS5 for immutable corpus index files |
-
-The Android modules now use AGP built-in Kotlin. The external `org.jetbrains.kotlin.android` plugin and both transitional AGP opt-out properties are removed. All Android module scripts use the public typed `ApplicationExtension`/`LibraryExtension` DSL. Compose uses the dedicated Kotlin Compose compiler plugin. App BuildConfig values are added through lazy `androidComponents.onVariants` rather than the deprecated eager `buildConfigField()` API. There are no `applicationVariants`, `libraryVariants`, `testVariants` or `unitTestVariants` calls in project build scripts. These are the permanent AGP 9 migration changes required before any AGP 10 upgrade. See the official [built-in Kotlin migration guide](https://developer.android.com/build/migrate-to-built-in-kotlin).
-
-KGP 2.4.21 is pinned through the root buildscript classpath because this build uses a newer compiler than AGP's bundled default. KSP 2.3.13 is pinned explicitly for the Room processor path. KSP/Room code generation still requires a successful Android Gradle run; this environment cannot validate that runtime integration.
-
-## Gradle CI and dependency reproducibility
-
-- `org.gradle.configuration-cache=false` is explicit. The supplied CI logs showed AGP navigation-resource and Gradle dependency-report tasks failing while serializing configuration-cache state. Re-enable only after these tasks pass with configuration cache on the target runner.
-- Locking is enabled for the explicitly pinned root KGP/KSP buildscript classpath and ordinary resolvable project configurations. AGP runtime classpaths and CycloneDX BOM configurations explicitly deactivate locking because their plugins install `failOnDynamicVersions`; Gradle forbids combining that strategy with dependency locking on the same Configuration. We do **not** add a second `failOnDynamicVersions()` call. Version-catalog and direct dependency declarations are statically checked for dynamic selectors, and normal compile/processor configurations retain transitive lock state.
-- CI runs bootstrap permission regression, AGP built-in Kotlin/DSL checks, reproducibility policy checks, Room migration guards, tests, lint, offline merged-manifest audit, API 36 instrumentation, dependency report and CycloneDX SBOM.
-- CI passes `--write-locks` to successful Gradle tasks and uploads generated project `gradle.lockfile` and root `buildscript-gradle.lockfile` artifacts. Lockfiles and Gradle verification metadata must be reviewed and committed from a successful network-enabled CI run; they are not fabricated here.
-
-## Honest verification status
-
-The authoring workspace has JDK 21 and Kotlin compiler 1.9.0, but **no installed Gradle distribution or Android SDK**. The container cannot resolve Gradle/Maven repositories. Therefore a real Android Gradle build, KSP/Room generation, AndroidX/SQLCipher runtime tests, API 36 emulator tests and Galaxy S24 FE tests have **not** been run here. Do not treat local static checks as a passing Android build.
-
-Local checks for this tranche include the AGP built-in Kotlin migration tests, public-DSL/version-policy guards, Room v6 migration/schema/SQLite smoke guard, Gradle bootstrap regression, offline manifest and XML checks, secret scan, source inventories and archive/checksum integrity. Their exact results and limitations are in `docs/reports/PHASE4C_AND_CI_MIGRATION_REPORT_2026-11-08.md`.
-
-## Database and key recovery policy
-
-- User database is app-private and SQLCipher encrypted.
-- Random database passphrase is wrapped by a non-exportable AES-GCM Android Keystore key in `noBackupFilesDir/database-key.envelope`.
-- Existing database with missing/invalid envelope or missing Keystore key fails closed. The app never generates a replacement key for an existing database, deletes the database automatically or falls back to plaintext.
-- Room migrations are explicit and non-destructive: 1→2 adds `pending_approval.sourceGrantId`; 2→3 adds `action_execution.proposalId` and unique index; 3→4 adds encrypted `publisher_keyring_state`; 4→5 adds dense-index generation/vector tables and indices with cascade deletion.
-- The Room KSP schema JSON snapshot is not fabricated. Generate and review schema `5.json` on the first successful Gradle/KSP runner and commit it along with migration tests before release.
-
-## Important incomplete areas and release gates
-
-- No production publisher root public key is pinned. The app intentionally disables publisher trust operations until the operator supplies a reviewed root key via controlled build properties. No publisher private key, placeholder root key or corpus data is included.
-- No signed, rights-cleared, scholarly-reviewed Qur'an/hadith/tafsir/fiqh corpus pack is included. Corpus rights, provenance, exact editions/translations, and scholarly governance remain mandatory release gates.
-- Phase 5B adds a pinned LiteRT-LM runtime and generation/embedding adapters, but no `.litertlm` model weights are bundled in the APK. Users import catalog-pinned files through SAF. Native model initialization, generated output quality, embedding golden-vector parity, complete dense-index query routing and Galaxy S24 FE benchmarks remain validation gates.
-- No dense ranking is used when a model is absent. Dense retrieval must remain subordinate to hard source eligibility, licensing, review, language, madhhab and citation checks.
-- Phase 2 remains a first functional slice: recurring habits, calendar integration, notification scheduling, history UI, full Canvas step editing/attachments/undo, prayer-time calculation cards and other listed roadmap functions are not complete.
-- Phase 3 does not yet register production OS tool adapters, a model-driven AgentStepProcessor or WorkManager scheduler. No external action is currently registered by the application.
-- HMAC audit chaining has no independent anti-truncation anchor; deletion of the entire tail/table cannot be proven from the local chain alone.
-- SQLCipher/Keystore recovery and migration instrumentation, supported-ABI and API-range testing, localization/RTL, battery/performance and physical-device QA remain release gates.
-
-## Build commands
-
-```bash
-./gradlew --version
-./gradlew :app:assembleOfflineSideloadDebug
-./gradlew :app:testOfflineSideloadDebugUnitTest
-./gradlew :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest
-./gradlew :core:persistence:testDebugUnitTest :core:knowledge-api:testDebugUnitTest
-./gradlew :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest
-./gradlew :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest
-./gradlew :feature:corpus-management:testDebugUnitTest
-./gradlew :core:model-manager:testDebugUnitTest :core:inference-runtime:testDebugUnitTest
-./gradlew :app:lintOfflineSideloadDebug :core:inference-runtime:lint
-./gradlew :app:connectedOfflineSideloadDebugAndroidTest
-./gradlew :core:inference-runtime:connectedDebugAndroidTest
-./gradlew :core:persistence:connectedDebugAndroidTest
-```
-
-For initial dependency lock generation on a network-enabled host, run the CI workflow with `--write-locks`, review all generated lockfiles and commit them. Do not manufacture lock entries by hand.
-
-## Continuity and checkpoints
-
-- Project Library folder: `/Timeline_Agentique/`
-- Immutable ZIPs and SHA-256 files are versioned; do not overwrite earlier deliveries.
-- Every meaningful tranche has a new checkpoint under `docs/checkpoints/` and report under `docs/reports/`.
-- Resume from `docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-09_phase5c-dense-retrieval.md` for Phase 5C validation and Phase 5D continuation.
+See [`docs/phase5/phase5c-dense-retrieval.md`](docs/phase5/phase5c-dense-retrieval.md) for the architecture, schema migration, exact identity rules, UI flow, safety behaviour, tests and remaining acceptance gates. Phase 5C is implementation-complete in this source tree but is **not release-certified** until GitHub Actions completes Android compilation/unit/lint and API 36 SQLCipher/bundled-SQLite instrumentation, and the exact EmbeddingGemma artifact has been exercised on the Galaxy S24 FE.

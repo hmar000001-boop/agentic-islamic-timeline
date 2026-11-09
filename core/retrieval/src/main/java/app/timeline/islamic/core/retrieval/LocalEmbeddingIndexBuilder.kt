@@ -44,7 +44,7 @@ class LocalEmbeddingIndexBuilder(
         var previousKey: String? = null
         try {
             while (true) {
-                val batch = source.readBatch(pack, indexFile, afterRowId, batchSize)
+                val batch = source.readBatch(pack, indexFile, afterRowId, batchSize, descriptor.maximumInputCharacters)
                 if (batch.isEmpty()) break
                 require(batch.size <= batchSize) { "Passage source exceeded requested batch size" }
                 require(batch.zipWithNext().all { (a, b) -> b.rowId > a.rowId }) { "Passage source rows are not strictly ordered" }

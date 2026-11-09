@@ -2,6 +2,7 @@ package app.timeline.islamic.core.retrieval
 
 import app.timeline.islamic.core.knowledge.DenseEmbeddingIndexStore
 import app.timeline.islamic.core.knowledge.DenseIndexGeneration
+import app.timeline.islamic.core.knowledge.DenseIndexVectorRecord
 import app.timeline.islamic.core.knowledge.EmbeddingPassageInput
 import app.timeline.islamic.core.knowledge.EmbeddingPassageSource
 import app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord
@@ -80,7 +81,7 @@ class LocalEmbeddingIndexBuilderTest {
         val fixtureStore = FixtureStore()
         val file = createFixtureIndexFile()
         try {
-            val source = EmbeddingPassageSource { _, _, after, limit ->
+            val source = EmbeddingPassageSource { _, _, after, limit, _ ->
                 if (after == 0L) (1L..(limit + 1)).map { EmbeddingPassageInput(it, it.toString().padStart(64, '0'), "text") } else emptyList()
             }
             val model = fixtureModel { FloatArray(16) { 1f } }
@@ -104,7 +105,7 @@ class LocalEmbeddingIndexBuilderTest {
     }
 
     private class FixtureSource(private val rows: List<EmbeddingPassageInput>) : EmbeddingPassageSource {
-        override suspend fun readBatch(pack: InstalledCorpusPackRecord, indexFile: File, afterRowId: Long, limit: Int) =
+        override suspend fun readBatch(pack: InstalledCorpusPackRecord, indexFile: File, afterRowId: Long, limit: Int, maximumInputCharacters: Int) =
             rows.filter { it.rowId > afterRowId }.take(limit)
     }
 
@@ -126,5 +127,6 @@ class LocalEmbeddingIndexBuilderTest {
         override suspend fun recoverAbandonedGenerations() = 0
         override suspend fun activeGeneration(packId: String, packVersion: String, modelId: String, modelVersion: String): DenseIndexGeneration? = null
         override suspend fun vectorsFor(generationId: String, stableEvidenceKeys: List<String>) = emptyMap<String, QuantizedEmbeddingVector>()
+        override suspend fun vectorsPage(generationId: String, afterStableEvidenceKey: String, limit: Int) = emptyList<DenseIndexVectorRecord>()
     }
 }

@@ -60,8 +60,12 @@ jobs:
           python3 scripts/verify-string-translations.py
       - name: Scan source for common secret patterns
         run: python3 scripts/secret-scan.py
-      - name: Validate Phase 4 Room v5 and encrypted dense-index migrations
+      - name: Validate Room v6 and encrypted dense-index migrations
         run: python3 scripts/check-phase4-schema.py
+      - name: Verify Phase 5C fingerprinted dense retrieval and Room v6 migration
+        run: python3 scripts/test-phase5c-dense-retrieval-contract.py
+      - name: Execute Phase 5C dense indexing source SQL contract
+        run: python3 scripts/test-phase5c-readbatch-sql.py
       - name: Verify Room dense-index persistence contract
         run: python3 scripts/verify-room-dense-index-contract.py
       - name: Verify persistence Android-test dependencies and fixtures
@@ -94,6 +98,8 @@ jobs:
         run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :core:knowledge-api:testDebugUnitTest :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest :core:model-manager:testDebugUnitTest :core:inference-runtime:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest :feature:corpus-management:testDebugUnitTest :feature:model-management:testDebugUnitTest
       - name: Assemble and lint
         run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug :core:corpus:lint :core:retrieval:lint :core:model-manager:lint :core:inference-runtime:lint :feature:corpus-management:lint :feature:model-management:lint
+      - name: Verify generated Room v6 schema snapshot
+        run: python3 scripts/verify-room-schema-export.py
       - name: Audit offline merged manifest
         run: |
           ./gradlew --no-daemon --no-configuration-cache --write-locks :app:processOfflineSideloadDebugMainManifest

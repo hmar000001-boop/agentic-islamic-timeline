@@ -204,14 +204,50 @@ data class LocalEmbeddingModelDescriptor(
     val modelVersion: String,
     val artifactSha256: String,
     val dimension: Int,
-    val maximumInputCharacters: Int = 16_384
+    val maximumInputCharacters: Int = 16_384,
+    /** Model-specific asymmetric retrieval instructions. These are part of the index identity. */
+    val documentPrefix: String = "",
+    val queryPrefix: String = "",
+    /** Versioned normalization/quantization contract; changing it requires a fresh generation. */
+    val normalizationPolicy: String = "l2-normalized-int8-symmetric-v1"
 ) {
+    val embeddingProfileSha256: String = profileFingerprint(
+        modelId, modelVersion, artifactSha256, dimension, maximumInputCharacters,
+        documentPrefix, queryPrefix, normalizationPolicy
+    )
+
     init {
         require(modelId.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,95}")))
         require(modelVersion.isNotBlank() && modelVersion.length <= 64)
         require(artifactSha256.matches(Regex("[a-f0-9]{64}")))
         require(dimension in 8..4096)
         require(maximumInputCharacters in 256..65_536)
+        require(documentPrefix.length <= 512 && queryPrefix.length <= 512)
+        require(normalizationPolicy.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,95}")))
+    }
+
+    companion object {
+        private fun profileFingerprint(
+            modelId: String,
+            modelVersion: String,
+            artifactSha256: String,
+            dimension: Int,
+            maximumInputCharacters: Int,
+            documentPrefix: String,
+            queryPrefix: String,
+            normalizationPolicy: String
+        ): String {
+            // Length-prefix every value to avoid delimiter ambiguity in a canonical profile.
+            val values = listOf(
+                "embedding-profile-v1", modelId, modelVersion, artifactSha256,
+                dimension.toString(), maximumInputCharacters.toString(), documentPrefix,
+                queryPrefix, normalizationPolicy
+            )
+            val canonical = values.joinToString("") { "${it.length}:$it;" }
+            return java.security.MessageDigest.getInstance("SHA-256")
+                .digest(canonical.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+        }
     }
 }
 
@@ -231,6 +267,9 @@ data class EmbeddingPassageInput(
 interface LocalTextEmbeddingModel {
     val descriptor: LocalEmbeddingModelDescriptor
     suspend fun embedBatch(texts: List<String>): List<FloatArray>
+
+    /** Query embeddings may use an asymmetric task prefix; generic models may share embedBatch. */
+    suspend fun embedQuery(text: String): FloatArray = embedBatch(listOf(text)).single()
 }
 
 /** Streams immutable source passages from a validated signed Corpus Pack in row-id order. */
@@ -239,7 +278,8 @@ fun interface EmbeddingPassageSource {
         pack: InstalledCorpusPackRecord,
         indexFile: File,
         afterRowId: Long,
-        limit: Int
+        limit: Int,
+        maximumInputCharacters: Int
     ): List<EmbeddingPassageInput>
 }
 
@@ -268,7 +308,16 @@ data class DenseIndexGeneration(
     val dimension: Int,
     val vectorCount: Long,
     val encodedBytes: Long,
-    val state: String
+    val state: String,
+    /** Exact signed pack-manifest identity used to build this derived index. */
+    val corpusManifestSha256: String = "",
+    /** Includes model artifact, dimensions, task prefixes and vector normalization policy. */
+    val embeddingProfileSha256: String = ""
+)
+
+data class DenseIndexVectorRecord(
+    val stableEvidenceKey: String,
+    val vector: QuantizedEmbeddingVector
 )
 
 /** Storage owns the staging/active generation transaction; callers cannot partially publish an index. */
@@ -285,4 +334,23 @@ interface DenseEmbeddingIndexStore {
     suspend fun recoverAbandonedGenerations(): Int
     suspend fun activeGeneration(packId: String, packVersion: String, modelId: String, modelVersion: String): DenseIndexGeneration?
     suspend fun vectorsFor(generationId: String, stableEvidenceKeys: List<String>): Map<String, QuantizedEmbeddingVector>
+
+    /** Exact identity match: a generation is usable only for this signed pack and embedding profile. */
+    suspend fun activeGeneration(
+        pack: InstalledCorpusPackRecord,
+        model: LocalEmbeddingModelDescriptor
+    ): DenseIndexGeneration? = activeGeneration(pack.packId, pack.version, model.modelId, model.modelVersion)
+        ?.takeIf {
+            it.corpusManifestSha256 == pack.manifestSha256 &&
+                it.modelSha256 == model.artifactSha256 &&
+                it.dimension == model.dimension &&
+                it.embeddingProfileSha256 == model.embeddingProfileSha256
+        }
+
+    /** Stable-key keyset pagination; implementations must return strictly increasing keys. */
+    suspend fun vectorsPage(
+        generationId: String,
+        afterStableEvidenceKey: String,
+        limit: Int
+    ): List<DenseIndexVectorRecord>
 }

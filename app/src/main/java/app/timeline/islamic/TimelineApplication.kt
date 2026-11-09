@@ -37,6 +37,10 @@ import app.timeline.islamic.core.persistence.RoomPublisherKeyringStore
 import app.timeline.islamic.core.persistence.RoomDenseEmbeddingIndexStore
 import app.timeline.islamic.core.retrieval.BundledSqliteCorpusIndex
 import app.timeline.islamic.core.retrieval.LocalEmbeddingIndexBuilder
+import app.timeline.islamic.core.retrieval.LocalCorpusRetriever
+import app.timeline.islamic.core.retrieval.LocalDenseRetriever
+import app.timeline.islamic.core.retrieval.StoredDenseIndexRetriever
+import app.timeline.islamic.core.retrieval.RetrievalResponse
 import app.timeline.islamic.core.models.AndroidDeviceResourceProbe
 import app.timeline.islamic.core.models.AndroidModelFileStore
 import app.timeline.islamic.core.models.ModelCatalog
@@ -52,6 +56,7 @@ import app.timeline.islamic.feature.models.ModelManagementUiState
 import app.timeline.islamic.feature.models.ModelUiItem
 import app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord
 import app.timeline.islamic.core.knowledge.LocalTextEmbeddingModel
+import app.timeline.islamic.core.knowledge.RetrievalRequest
 import java.io.File
 import app.timeline.islamic.feature.corpus.CorpusManagementUiState
 import app.timeline.islamic.feature.corpus.CorpusPackUiItem
@@ -218,8 +223,21 @@ class TimelineApplication : Application() {
             }
             cleanupDenseIndexesForInactivePacks()
             val manager = publisherKeyringManager
+            val embeddingSpec = ModelCatalog.require(LiteRtEmbeddingTextModel.EMBEDDING_MODEL_ID)
+            val embeddingModelInstalled = modelManager.installedModels().any {
+                it.modelId == embeddingSpec.id && it.revision == embeddingSpec.revision &&
+                    it.status == app.timeline.islamic.core.models.ModelLifecycleStatus.INSTALLED
+            }
+            val embeddingDescriptor = LiteRtEmbeddingTextModel.descriptorForCatalog()
             val packs = corpusRegistry.listAll().map { record ->
-                CorpusPackUiItem(record.packId, record.version, record.status, record.licenseProfile, record.manifestSha256)
+                val generation = if (manager?.isReady() == true && embeddingModelInstalled &&
+                    record.status == InstalledCorpusPackRecord.STATUS_INSTALLED
+                ) denseEmbeddingIndexStore.activeGeneration(record, embeddingDescriptor) else null
+                CorpusPackUiItem(
+                    record.packId, record.version, record.status, record.licenseProfile, record.manifestSha256,
+                    denseIndexReady = generation != null,
+                    denseIndexVectorCount = generation?.vectorCount ?: 0L
+                )
             }.sortedWith(compareBy(CorpusPackUiItem::packId, CorpusPackUiItem::version))
             CorpusManagementUiState(
                 loading = false,
@@ -229,7 +247,8 @@ class TimelineApplication : Application() {
                 keyringVersion = manager?.version() ?: 0L,
                 packCount = packs.size,
                 packs = packs,
-                lastRevalidationSummary = summary
+                lastRevalidationSummary = summary,
+                embeddingModelInstalled = embeddingModelInstalled
             )
         } catch (failure: Exception) {
             CorpusManagementUiState(
@@ -239,6 +258,13 @@ class TimelineApplication : Application() {
                 keyringReady = publisherKeyringManager?.isReady() == true,
                 keyringVersion = publisherKeyringManager?.version() ?: 0L,
                 packs = runCatching { corpusRegistry.listAll().map { CorpusPackUiItem(it.packId, it.version, it.status, it.licenseProfile, it.manifestSha256) } }.getOrDefault(emptyList()),
+                embeddingModelInstalled = runCatching {
+                    val spec = ModelCatalog.require(LiteRtEmbeddingTextModel.EMBEDDING_MODEL_ID)
+                    modelManager.installedModels().any {
+                        it.modelId == spec.id && it.revision == spec.revision &&
+                            it.status == app.timeline.islamic.core.models.ModelLifecycleStatus.INSTALLED
+                    }
+                }.getOrDefault(false),
                 message = failure::class.simpleName ?: "CORPUS_INITIALIZATION_FAILED"
             )
         }
@@ -291,6 +317,69 @@ class TimelineApplication : Application() {
         return LocalEmbeddingIndexBuilder(corpusIndex, denseEmbeddingIndexStore).build(record, indexFile, model)
     }
 
+    /**
+     * Evidence-first local retrieval. FTS5 remains available without an embedding artifact; when
+     * the catalog-pinned EmbeddingGemma artifact is installed, the query is embedded locally and
+     * fused with lexical candidates by RRF. No network provider or model-generated evidence is used.
+     */
+    suspend fun retrieveCorpus(request: RetrievalRequest): RetrievalResponse = inferenceLifecycleMutex.withLock {
+        check(publisherKeyringManager?.isReady() == true) {
+            "A verified publisher keyring is required before corpus retrieval"
+        }
+        corpusRuntime?.initialize()
+        val installedPacks = corpusRegistry.listInstalled()
+        val packsRoot = File(filesDir, "corpus-packs")
+        val lexicalOnly = { dense: LocalDenseRetriever? ->
+            LocalCorpusRetriever(packsRoot, corpusIndex, denseRetriever = dense)
+        }
+        val spec = ModelCatalog.require(LiteRtEmbeddingTextModel.EMBEDDING_MODEL_ID)
+        val installedModel = modelManager.installedModels().singleOrNull {
+            it.modelId == spec.id && it.revision == spec.revision &&
+                it.status == app.timeline.islamic.core.models.ModelLifecycleStatus.INSTALLED
+        }
+        if (installedModel == null) {
+            return@withLock lexicalOnly(null).search(request, installedPacks)
+        }
+
+        val runtimeSnapshot = generationRuntime.snapshot.value
+        if (runtimeSnapshot.state != GenerationRuntimeState.UNLOADED) {
+            val unavailableDenseProvider = LocalDenseRetriever { _, _, _, _ ->
+                error("Dense retrieval is unavailable while the generation runtime is active")
+            }
+            return@withLock lexicalOnly(unavailableDenseProvider).search(request, installedPacks)
+        }
+        val resourceBlock = runtimeLoadBlockReason(spec.minimumDeviceRamBytes, modelResourceProbe.snapshot())
+        if (resourceBlock != null) {
+            val unavailableDenseProvider = LocalDenseRetriever { _, _, _, _ -> error(resourceBlock) }
+            return@withLock lexicalOnly(unavailableDenseProvider).search(request, installedPacks)
+        }
+        val embeddingModel = try {
+            LiteRtEmbeddingTextModel.open(
+                modelManager.resolveInstalledFile(spec.id), File(cacheDir, "litertlm")
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Let the orchestrator retain lexical results and record a dense-provider failure.
+            val failedProvider = LocalDenseRetriever { _, _, _, _ ->
+                error("The installed local embedding runtime could not be initialized")
+            }
+            return@withLock lexicalOnly(failedProvider).search(request, installedPacks)
+        }
+        try {
+            val denseRetriever = StoredDenseIndexRetriever(
+                store = denseEmbeddingIndexStore,
+                model = embeddingModel,
+                evidenceLookup = corpusIndex
+            )
+            lexicalOnly(denseRetriever).search(request, installedPacks)
+        } finally {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable + kotlinx.coroutines.Dispatchers.IO) {
+                embeddingModel.close()
+            }
+        }
+    }
+
     /** Load a catalog-pinned, installed Gemma artifact on LiteRT-LM CPU only. */
     suspend fun loadGenerationModel(modelId: String) = inferenceLifecycleMutex.withLock {
         val spec = ModelCatalog.require(modelId)
@@ -339,7 +428,9 @@ class TimelineApplication : Application() {
         val snapshot = modelResourceProbe.snapshot()
         val runtimeBlock = runtimeLoadBlockReason(spec.minimumDeviceRamBytes, snapshot)
         check(runtimeBlock == null) { runtimeBlock ?: "Embedding runtime preflight blocked" }
-        generationRuntime.unload()
+        check(generationRuntime.snapshot.value.state == GenerationRuntimeState.UNLOADED) {
+            "Unload the generation model explicitly before building the dense index"
+        }
         val modelFile = modelManager.resolveInstalledFile(spec.id)
         val embeddingModel = LiteRtEmbeddingTextModel.open(modelFile, File(cacheDir, "litertlm"))
         try {
@@ -363,7 +454,9 @@ class TimelineApplication : Application() {
         val snapshot = modelResourceProbe.snapshot()
         val runtimeBlock = runtimeLoadBlockReason(spec.minimumDeviceRamBytes, snapshot)
         check(runtimeBlock == null) { runtimeBlock ?: "Embedding runtime preflight blocked" }
-        generationRuntime.unload()
+        check(generationRuntime.snapshot.value.state == GenerationRuntimeState.UNLOADED) {
+            "Unload the generation model explicitly before query embedding"
+        }
         val embeddingModel = LiteRtEmbeddingTextModel.open(
             modelManager.resolveInstalledFile(spec.id), File(cacheDir, "litertlm")
         )

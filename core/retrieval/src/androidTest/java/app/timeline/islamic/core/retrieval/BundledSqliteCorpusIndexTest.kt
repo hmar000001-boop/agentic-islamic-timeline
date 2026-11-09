@@ -93,6 +93,93 @@ class BundledSqliteCorpusIndexTest {
         }
     }
 
+    @Test fun denseEvidenceLookupReturnsOnlyMatchingEligibleOriginalPassages() = runBlocking {
+        val file = newIndexFile("dense-evidence-lookup")
+        try {
+            buildIndex(file)
+            val pack = InstalledCorpusPackRecord(
+                packId = "fixture-pack", version = "1.0.0", manifestSha256 = "d".repeat(64),
+                installedAtEpochMillis = 150, licenseProfile = "fixture-cleared"
+            )
+            val evidenceKey = EvidenceIdentity.stableKey("quran-source", "edition-1", "2:255", CorpusLanguage.ARABIC)
+            val index = BundledSqliteCorpusIndex()
+            val arabicFilter = RetrievalFilter(setOf(CorpusLanguage.ARABIC), selectedMadhhab = null, asOfEpochMillis = 200)
+            assertEquals(
+                setOf(evidenceKey),
+                index.readEligibleEvidenceKeysByStableKeys(pack, file, listOf(evidenceKey), arabicFilter)
+            )
+            assertEquals(
+                emptySet<String>(),
+                index.readEligibleEvidenceKeysByStableKeys(
+                    pack, file, listOf(evidenceKey),
+                    RetrievalFilter(setOf(CorpusLanguage.ENGLISH), selectedMadhhab = null, asOfEpochMillis = 200)
+                )
+            )
+            val found = index.readEvidenceByStableKeys(pack, file, listOf(evidenceKey), arabicFilter)
+            assertEquals(1, found.size)
+            assertEquals(ORIGINAL_TEXT, found.single().originalText)
+
+            val filtered = index.readEvidenceByStableKeys(
+                pack, file, listOf(evidenceKey),
+                RetrievalFilter(setOf(CorpusLanguage.ENGLISH), selectedMadhhab = null, asOfEpochMillis = 200)
+            )
+            assertEquals(0, filtered.size)
+        } finally {
+            deleteIndexFiles(file)
+        }
+    }
+
+    @Test fun embeddingBatchReadsOnlyEligiblePassagesWithinTheModelInputLimit() = runBlocking {
+        val validFile = newIndexFile("embedding-batch-valid")
+        val restrictedFile = newIndexFile("embedding-batch-restricted")
+        val pendingFile = newIndexFile("embedding-batch-pending")
+        val oversizedFile = newIndexFile("embedding-batch-oversized")
+        try {
+            buildIndex(validFile)
+            buildIndex(restrictedFile, licenseStatus = "RESTRICTED")
+            buildIndex(pendingFile, reviewStatus = "PENDING")
+            buildIndex(oversizedFile, originalTextOverride = "x".repeat(9_000))
+            val pack = InstalledCorpusPackRecord(
+                packId = "fixture-pack", version = "1.0.0", manifestSha256 = "d".repeat(64),
+                installedAtEpochMillis = 150, licenseProfile = "fixture-cleared"
+            )
+            val source = BundledSqliteCorpusIndex(clock = { 200L })
+            assertEquals(1, source.readBatch(pack, validFile, 0L, 24, 8_192).size)
+            assertEquals(0, source.readBatch(pack, restrictedFile, 0L, 24, 8_192).size)
+            assertEquals(0, source.readBatch(pack, pendingFile, 0L, 24, 8_192).size)
+            assertEquals(0, source.readBatch(pack, oversizedFile, 0L, 24, 8_192).size)
+        } finally {
+            listOf(validFile, restrictedFile, pendingFile, oversizedFile).forEach(::deleteIndexFiles)
+        }
+    }
+
+    @Test fun embeddingBatchRejectsPassagesWhoseIdentityOrContentChangedAfterPackValidation() = runBlocking {
+        val changedHashFile = newIndexFile("embedding-changed-hash")
+        val changedKeyFile = newIndexFile("embedding-changed-key")
+        val changedNormalizedFile = newIndexFile("embedding-changed-normalized")
+        try {
+            buildIndex(changedHashFile, contentHashOverride = "e".repeat(64))
+            buildIndex(changedKeyFile, stableEvidenceKeyOverride = "f".repeat(64))
+            buildIndex(changedNormalizedFile, normalizedTextOverride = "altered normalized content")
+            val pack = InstalledCorpusPackRecord(
+                packId = "fixture-pack", version = "1.0.0", manifestSha256 = "d".repeat(64),
+                installedAtEpochMillis = 150, licenseProfile = "fixture-cleared"
+            )
+            val source = BundledSqliteCorpusIndex(clock = { 200L })
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { source.readBatch(pack, changedHashFile, 0L, 24, 8_192) }
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { source.readBatch(pack, changedKeyFile, 0L, 24, 8_192) }
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { source.readBatch(pack, changedNormalizedFile, 0L, 24, 8_192) }
+            }
+        } finally {
+            listOf(changedHashFile, changedKeyFile, changedNormalizedFile).forEach(::deleteIndexFiles)
+        }
+    }
+
     @Test fun rejectsPassageWhoseOriginalTextHashDoesNotMatch() {
         val file = newIndexFile("bad-hash")
         try {
@@ -111,7 +198,11 @@ class BundledSqliteCorpusIndexTest {
         normalizedTextOverride: String? = null,
         corruptFts: Boolean = false,
         licenseVerifiedAtEpochMillis: Long = 100L,
-        reviewedAtEpochMillis: Long = 101L
+        reviewedAtEpochMillis: Long = 101L,
+        licenseStatus: String = "CLEARED",
+        reviewStatus: String = "APPROVED",
+        originalTextOverride: String? = null,
+        stableEvidenceKeyOverride: String? = null
     ) {
         BundledSQLiteDriver().open(file.absolutePath).use { db ->
             db.execSQL("PRAGMA foreign_keys = ON")
@@ -159,8 +250,8 @@ class BundledSqliteCorpusIndexTest {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""".trimIndent()).use { insert ->
                 val values: List<Any?> = listOf(
                     "quran-source", "QURAN", "Qur'an", null, "Test publisher", "edition-1", "Edition 1",
-                    "Test rights holder", "license-1", null, "CLEARED", licenseVerifiedAtEpochMillis, null,
-                    "APPROVED", "reviewer-1", reviewedAtEpochMillis, "a".repeat(64)
+                    "Test rights holder", "license-1", null, licenseStatus, licenseVerifiedAtEpochMillis, null,
+                    reviewStatus, "reviewer-1", reviewedAtEpochMillis, "a".repeat(64)
                 )
                 values.forEachIndexed { index, value ->
                     when (value) {
@@ -175,12 +266,14 @@ class BundledSqliteCorpusIndexTest {
                 passage_id, source_id, locator, language, original_text, normalized_text,
                 normalizer_version, madhhab_scope, source_grade, stable_evidence_key, content_sha256
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""".trimIndent()).use { insert ->
-                val normalized = CorpusTextNormalizer.normalize(ORIGINAL_TEXT).text
+                val originalText = originalTextOverride ?: ORIGINAL_TEXT
+                val normalized = CorpusTextNormalizer.normalize(originalText).text
                 val values = listOf(
-                    "ayah-2-255", "quran-source", "2:255", "ar", ORIGINAL_TEXT,
+                    "ayah-2-255", "quran-source", "2:255", "ar", originalText,
                     normalizedTextOverride ?: normalized,
-                    "timeline-normalizer-v1", "ALL", "quran", EvidenceIdentity.stableKey("quran-source", "edition-1", "2:255", CorpusLanguage.ARABIC),
-                    contentHashOverride ?: EvidenceIdentity.contentSha256(ORIGINAL_TEXT)
+                    "timeline-normalizer-v1", "ALL", "quran",
+                    stableEvidenceKeyOverride ?: EvidenceIdentity.stableKey("quran-source", "edition-1", "2:255", CorpusLanguage.ARABIC),
+                    contentHashOverride ?: EvidenceIdentity.contentSha256(originalText)
                 )
                 values.forEachIndexed { index, value -> insert.bindText(index + 1, value) }
                 insert.step()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static/SQLite guard for Phase 4 Room v3→v4 and v4→v5 migrations."""
+"""Static/SQLite guard for Room schema v6 and the explicit v3→v6 migration chain."""
 from pathlib import Path
 import re
 import sqlite3
@@ -21,8 +21,8 @@ keyring_manager = (ROOT / "core/corpus/src/main/java/app/timeline/islamic/core/c
 installer = (ROOT / "core/corpus/src/main/java/app/timeline/islamic/core/corpus/CorpusPackInstaller.kt").read_text(encoding="utf-8")
 dense_store = read("RoomDenseEmbeddingIndexStore.kt")
 
-if not re.search(r"version\s*=\s*5", db):
-    raise SystemExit("AppDatabase version must be 5")
+if not re.search(r"version\s*=\s*6", db):
+    raise SystemExit("AppDatabase version must be 6")
 if db.count("::class") != 27:
     raise SystemExit(f"Expected 27 registered Room entities, found {db.count('::class')}")
 for entity, table in (
@@ -36,6 +36,7 @@ for entity, table in (
 for migration, factory_ref in (
     ("MIGRATION_3_4", "AppDatabaseMigrations.MIGRATION_3_4"),
     ("MIGRATION_4_5", "AppDatabaseMigrations.MIGRATION_4_5"),
+    ("MIGRATION_5_6", "AppDatabaseMigrations.MIGRATION_5_6"),
 ):
     if f"val {migration} = object : Migration(" not in migrations or factory_ref not in factory:
         raise SystemExit(f"EncryptedDatabaseFactory does not register {migration}")
@@ -95,9 +96,34 @@ if connection.execute("SELECT length(vector) FROM dense_index_vector WHERE gener
 connection.execute("DELETE FROM dense_index_generation WHERE generationId='gen-1'")
 if connection.execute("SELECT COUNT(*) FROM dense_index_vector").fetchone() != (0,):
     raise SystemExit("Dense vector foreign-key cascade failed")
+
+# Model a populated v5 database, then execute the exact 5→6 statements extracted from Kotlin.
+connection.execute("CREATE TABLE timeline_item (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL)")
+connection.execute("INSERT INTO timeline_item VALUES ('keep-user-data', 'Do not delete me')")
+connection.execute(
+    "INSERT INTO dense_index_generation VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ("old-gen", "pack", "1.0.0", "embedder", "1", "a" * 64, 16, 1, 16, 1024, "ACTIVE", 1234),
+)
+connection.execute("INSERT INTO dense_index_vector VALUES (?, ?, ?)", ("old-gen", "c" * 64, bytes(range(16))))
+migration_5_6 = migrations.split("val MIGRATION_5_6", 1)[1]
+migration_sql = re.findall(r'database\.execSQL\("([^\"]+)"\)', migration_5_6)
+if len(migration_sql) != 4:
+    raise SystemExit(f"Expected four explicit 5→6 SQL statements, found {len(migration_sql)}")
+for statement in migration_sql:
+    connection.execute(statement)
+generation_columns = {row[1]: row[2].upper() for row in connection.execute("PRAGMA table_info(dense_index_generation)")}
+if generation_columns.get("corpusManifestSha256") != "TEXT" or generation_columns.get("embeddingProfileSha256") != "TEXT":
+    raise SystemExit(f"Room v6 dense generation fingerprints are missing: {generation_columns}")
+if connection.execute("SELECT COUNT(*) FROM dense_index_generation").fetchone() != (0,) or \
+        connection.execute("SELECT COUNT(*) FROM dense_index_vector").fetchone() != (0,):
+    raise SystemExit("5→6 must discard only unprovable derived dense generations and vectors")
+if connection.execute("SELECT title FROM timeline_item WHERE id='keep-user-data'").fetchone() != ("Do not delete me",):
+    raise SystemExit("5→6 migration must preserve unrelated user data")
+if "DROP TABLE" in migration_5_6 or "fallbackToDestructiveMigration" in factory:
+    raise SystemExit("Room v6 migration must be non-destructive outside dense derived rows")
 connection.close()
 
 instrumented = ROOT / "core/persistence/src/androidTest/java/app/timeline/islamic/core/persistence/RoomDenseEmbeddingIndexStoreTest.kt"
 if not instrumented.is_file() or "SupportOpenHelperFactory" not in instrumented.read_text(encoding="utf-8"):
     raise SystemExit("SQLCipher Room dense-index instrumentation coverage is missing")
-print("Phase 4 guard passed: Room v5 / 3→4 and 4→5 migrations, 27 entities, SQLCipher keyring and dense BLOB schema, cascade/index checks, lifecycle gates and filesystem guards")
+print("Room guard passed: v6 / explicit 1→2→3→4→5→6 chain, 27 entities, SQLCipher dense schema, fingerprint columns, v5 derived-index invalidation and unrelated-data preservation")

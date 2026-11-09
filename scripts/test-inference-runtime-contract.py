@@ -76,7 +76,7 @@ require('DOCUMENT_PREFIX = "task: search result | text: "' in embedding and
         'QUERY_PREFIX = "task: search query | text: "' in embedding,
         "embedding index/query use LiteRT-LM documented asymmetric retrieval prefixes")
 require("computeEmbeddingBatchAsync" in embedding and "MAX_BATCH_SIZE = 24" in embedding and
-        "MAX_INPUT_CHARACTERS = 8_192" in embedding,
+        "MAX_INPUT_TOKENS = 8_192" in embedding and "MAX_INPUT_CHARACTERS = MAX_INPUT_TOKENS - maxOf(DOCUMENT_PREFIX.length, QUERY_PREFIX.length)" in embedding,
         "embedding calls use bounded async batches and bounded input length")
 require("vector.all { it.isFinite() }" in embedding and "norm in 0.90..1.10" in embedding,
         "embedding adapter rejects wrong, non-finite and unnormalized vectors")
@@ -111,9 +111,9 @@ for label, needle in [
     require(needle in workflow, f"CI includes inference-runtime {label}")
 require("scripts/test-inference-runtime-contract.py" in workflow,
         "CI executes the Phase 5B static source contract")
-require('versionCode = 23' in app_gradle and
-        'versionName = "0.6.2-phase5c-dense-retrieval"' in app_gradle,
-        "application release identity is 0.6.1 versionCode 22")
+require('versionCode = 24' in app_gradle and
+        'versionName = "0.6.3-phase5c-dense-retrieval"' in app_gradle,
+        "application release identity is 0.6.3 versionCode 24")
 
 unit_tests = ROOT / "core/inference-runtime/src/test/java/app/timeline/islamic/core/inference/InferenceRuntimePolicyTest.kt"
 android_tests = ROOT / "core/inference-runtime/src/androidTest/java/app/timeline/islamic/core/inference/LiteRtApiContractTest.kt"

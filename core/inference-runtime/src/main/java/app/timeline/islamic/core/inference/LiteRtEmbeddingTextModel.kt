@@ -31,13 +31,7 @@ class LiteRtEmbeddingTextModel private constructor(
     private val operationMutex = Mutex()
     @Volatile private var closed = false
 
-    override val descriptor = LocalEmbeddingModelDescriptor(
-        modelId = EMBEDDING_MODEL_ID,
-        modelVersion = ModelCatalog.require(EMBEDDING_MODEL_ID).revision,
-        artifactSha256 = ModelCatalog.require(EMBEDDING_MODEL_ID).sha256,
-        dimension = EMBEDDING_DIMENSION,
-        maximumInputCharacters = MAX_INPUT_CHARACTERS
-    )
+    override val descriptor = descriptorForCatalog()
 
     override suspend fun embedBatch(texts: List<String>): List<FloatArray> = operationMutex.withLock {
         check(!closed) { "Embedding model is closed" }
@@ -51,7 +45,7 @@ class LiteRtEmbeddingTextModel private constructor(
         responses.map { response -> validateVector(response.embedding) }
     }
 
-    /** Query-side helper; Phase 5B does not yet replace the existing lexical/RRF retrieval path. */
+    /** Query-side helper using the asymmetric query task prefix required by EmbeddingGemma retrieval. */
     suspend fun embedSearchQuery(text: String): FloatArray = operationMutex.withLock {
         check(!closed) { "Embedding model is closed" }
         val normalized = normalizeInput(text)
@@ -61,6 +55,8 @@ class LiteRtEmbeddingTextModel private constructor(
         )
         validateVector(response.embedding)
     }
+
+    override suspend fun embedQuery(text: String): FloatArray = embedSearchQuery(text)
 
     suspend fun close() = operationMutex.withLock {
         if (!closed) {
@@ -75,12 +71,29 @@ class LiteRtEmbeddingTextModel private constructor(
     companion object {
         const val EMBEDDING_MODEL_ID = "embeddinggemma-2-text-270m"
         const val EMBEDDING_DIMENSION = 768
-        const val MAX_INPUT_CHARACTERS = 8_192
-        const val MAX_BATCH_SIZE = 24
+        const val MAX_INPUT_TOKENS = 8_192
         // LiteRT-LM's EmbeddingGemma 2 guidance defines asymmetric prefixes for retrieval.
         // Do not substitute SentenceTransformers' PromptName formatting here.
         const val DOCUMENT_PREFIX = "task: search result | text: "
         const val QUERY_PREFIX = "task: search query | text: "
+        /** Raw passage/query allowance after reserving space for the longest task prefix. */
+        val MAX_INPUT_CHARACTERS = MAX_INPUT_TOKENS - maxOf(DOCUMENT_PREFIX.length, QUERY_PREFIX.length)
+        const val MAX_BATCH_SIZE = 24
+
+        /** Descriptor used by both the live engine and preflight/index-state inspection. */
+        fun descriptorForCatalog(): LocalEmbeddingModelDescriptor {
+            val spec = ModelCatalog.require(EMBEDDING_MODEL_ID)
+            return LocalEmbeddingModelDescriptor(
+                modelId = EMBEDDING_MODEL_ID,
+                modelVersion = spec.revision,
+                artifactSha256 = spec.sha256,
+                dimension = EMBEDDING_DIMENSION,
+                maximumInputCharacters = MAX_INPUT_CHARACTERS,
+                documentPrefix = DOCUMENT_PREFIX,
+                queryPrefix = QUERY_PREFIX,
+                normalizationPolicy = "embeddinggemma2-l2-normalized-int8-symmetric-v1"
+            )
+        }
 
         fun documentInput(text: String): String = "$DOCUMENT_PREFIX${normalizeInput(text)}"
 
@@ -129,7 +142,6 @@ class LiteRtEmbeddingTextModel private constructor(
             }
         }
 
-        private const val MAX_INPUT_TOKENS = 8_192
     }
 }
 

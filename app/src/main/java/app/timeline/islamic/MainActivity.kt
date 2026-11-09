@@ -29,6 +29,9 @@ import app.timeline.islamic.feature.canvas.CanvasFeature
 import app.timeline.islamic.feature.corpus.CorpusManagementFeature
 import app.timeline.islamic.feature.corpus.CorpusManagementUiState
 import app.timeline.islamic.feature.corpus.CorpusPackUiItem
+import app.timeline.islamic.feature.corpus.CorpusSearchResultUiItem
+import app.timeline.islamic.core.knowledge.CorpusLanguage
+import app.timeline.islamic.core.knowledge.RetrievalRequest
 import app.timeline.islamic.feature.models.ModelManagementFeature
 import app.timeline.islamic.feature.models.ModelManagementUiState
 import app.timeline.islamic.feature.timeline.TimelineFeature
@@ -105,7 +108,14 @@ class MainActivity : ComponentActivity() {
                                         },
                                         onRemovePack = { pack ->
                                             performCorpusAction { removeCorpusPack(pack.packId, pack.version) }
-                                        }
+                                        },
+                                        onBuildDenseIndex = { pack ->
+                                            performCorpusAction {
+                                                buildLocalEmbeddingIndexWithInstalledModel(pack.packId, pack.version)
+                                                Unit
+                                            }
+                                        },
+                                        onSearch = ::performCorpusSearch
                                     )
                                     AppDestination.MODELS -> ModelManagementFeature(
                                         state = modelState,
@@ -182,6 +192,62 @@ class MainActivity : ComponentActivity() {
                     busy = false,
                     message = result.exceptionOrNull()?.let { "Operation failed: ${it::class.simpleName ?: "UNKNOWN"}" }
                         ?: refreshed.exceptionOrNull()?.let { "Refresh failed: ${it::class.simpleName ?: "UNKNOWN"}" }
+                )
+            }
+        }
+    }
+
+    private fun performCorpusSearch(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return
+        val app = application as TimelineApplication
+        corpusState = corpusState.copy(
+            searchBusy = true,
+            searchMode = null,
+            searchDenseProviderFailed = false,
+            searchResults = emptyList(),
+            searchError = null
+        )
+        lifecycleScope.launch {
+            try {
+                val response = withContext(Dispatchers.IO) {
+                    app.retrieveCorpus(
+                        RetrievalRequest(
+                            queryText = trimmed,
+                            languages = setOf(CorpusLanguage.ARABIC, CorpusLanguage.ENGLISH),
+                            selectedMadhhab = null,
+                            maxResults = 12,
+                            maxCandidatesPerPack = 100
+                        )
+                    )
+                }
+                corpusState = corpusState.copy(
+                    searchBusy = false,
+                    searchMode = response.trace.mode.name,
+                    searchDenseProviderFailed = response.trace.denseProviderFailed,
+                    searchResults = response.results.map { fused ->
+                        val evidence = fused.evidence
+                        CorpusSearchResultUiItem(
+                            stableEvidenceKey = evidence.stableEvidenceKey,
+                            sourceType = evidence.source.sourceType.code,
+                            sourceTitle = evidence.source.title,
+                            edition = evidence.source.edition,
+                            language = evidence.language.code,
+                            locator = evidence.locator,
+                            originalText = evidence.originalText,
+                            rrfScore = fused.rrfScore,
+                            contributingChannels = fused.contributions.map { it.channelId }
+                        )
+                    },
+                    searchError = null
+                )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                corpusState = corpusState.copy(
+                    searchBusy = false,
+                    searchResults = emptyList(),
+                    searchError = "Search failed: ${failure::class.simpleName ?: "LOCAL_RETRIEVAL_ERROR"}"
                 )
             }
         }

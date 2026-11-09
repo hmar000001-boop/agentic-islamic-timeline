@@ -288,11 +288,13 @@ class ModelManager(
     fun preflight(modelId: String, snapshot: ModelResourceSnapshot): ModelPreflightResult {
         val spec = catalogById[modelId] ?: error("Model is not present in the built-in catalog")
         val requiredStorage = Math.addExact(spec.expectedBytes, minimumStorageReserveBytes)
+        // Keep nullable resource observations stable for all checks and the returned snapshot.
+        val thermalStatus = snapshot.thermalStatus
         val decision = when {
             snapshot.lowMemory -> ModelPreflightDecision.BLOCKED_LOW_MEMORY
             spec.minimumDeviceRamBytes != null && snapshot.totalRamBytes < spec.minimumDeviceRamBytes -> ModelPreflightDecision.BLOCKED_DEVICE_RAM
             snapshot.availableStorageBytes < requiredStorage -> ModelPreflightDecision.BLOCKED_STORAGE
-            snapshot.thermalStatus != null && snapshot.thermalStatus >= THERMAL_STATUS_SEVERE -> ModelPreflightDecision.BLOCKED_THERMAL
+            thermalStatus != null && thermalStatus >= THERMAL_STATUS_SEVERE -> ModelPreflightDecision.BLOCKED_THERMAL
             else -> ModelPreflightDecision.RUNTIME_PROBE_REQUIRED
         }
         return ModelPreflightResult(
@@ -301,7 +303,7 @@ class ModelManager(
             measuredAvailableStorageBytes = snapshot.availableStorageBytes,
             measuredProcessPssBytes = snapshot.processPssBytes,
             memoryClassMb = snapshot.memoryClassMb,
-            thermalStatus = snapshot.thermalStatus,
+            thermalStatus = thermalStatus,
             requiredFreeStorageBytes = requiredStorage
         )
     }

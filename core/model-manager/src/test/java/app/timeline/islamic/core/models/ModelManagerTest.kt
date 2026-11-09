@@ -377,6 +377,14 @@ class ModelManagerTest {
     }
 
     @Test
+    fun preflightKeepsUnknownThermalStateAsRuntimeProbeRequired() {
+        val result = manager.preflight(spec.id, snapshot(thermalStatus = null))
+        assertEquals(ModelPreflightDecision.RUNTIME_PROBE_REQUIRED, result.decision)
+        assertNull(result.thermalStatus)
+        assertFalse(result.runtimeReady)
+    }
+
+    @Test
     fun passingResourceEstimateStillRequiresARealRuntimeProbe() {
         val result = manager.preflight(spec.id, snapshot())
         assertEquals(ModelPreflightDecision.RUNTIME_PROBE_REQUIRED, result.decision)

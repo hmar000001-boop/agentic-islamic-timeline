@@ -14,7 +14,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -173,7 +173,7 @@ fun CorpusManagementFeature(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         state.searchResults.forEachIndexed { index, result ->
-                            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("${index + 1}. ${result.sourceTitle}", fontWeight = FontWeight.SemiBold)
                                 Text(stringResource(R.string.corpus_search_result_metadata,

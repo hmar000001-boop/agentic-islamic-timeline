@@ -471,12 +471,17 @@ class TimelineApplication : Application() {
         }
     }
 
-    private fun runtimeLoadBlockReason(minimumRamBytes: Long?, snapshot: app.timeline.islamic.core.models.ModelResourceSnapshot): String? = when {
-        snapshot.lowMemory -> "Android currently reports low memory; close other apps and retry"
-        minimumRamBytes != null && snapshot.totalRamBytes < minimumRamBytes -> "Device RAM is below this model's conservative resource floor"
-        snapshot.availableStorageBytes < MINIMUM_RUNTIME_CACHE_RESERVE_BYTES -> "Insufficient private storage for runtime cache reserve"
-        snapshot.thermalStatus != null && snapshot.thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE -> "Device is thermally constrained; retry after cooling"
-        else -> null
+    private fun runtimeLoadBlockReason(minimumRamBytes: Long?, snapshot: app.timeline.islamic.core.models.ModelResourceSnapshot): String? {
+        // ModelResourceSnapshot is declared in another module. Read its nullable public API
+        // property once into a local immutable value so Kotlin can safely narrow its type.
+        val thermalStatus = snapshot.thermalStatus
+        return when {
+            snapshot.lowMemory -> "Android currently reports low memory; close other apps and retry"
+            minimumRamBytes != null && snapshot.totalRamBytes < minimumRamBytes -> "Device RAM is below this model's conservative resource floor"
+            snapshot.availableStorageBytes < MINIMUM_RUNTIME_CACHE_RESERVE_BYTES -> "Insufficient private storage for runtime cache reserve"
+            thermalStatus != null && thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE -> "Device is thermally constrained; retry after cooling"
+            else -> null
+        }
     }
 
     private companion object {

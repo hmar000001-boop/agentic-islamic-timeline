@@ -281,7 +281,8 @@ class RoomAuthorizationStore(
             check(agent.transitionTask(task.id, task.status, task.stateVersion, nextStatus.name, now.toEpochMilli()) == 1) {
                 "Task state changed while recording execution outcome"
             }
-            val released = if (lease!!.expiresAtEpochMillis > now.toEpochMilli()) {
+            val ownedLease = requireNotNull(lease) { "Lease disappeared after fence ownership check" }
+            val released = if (ownedLease.expiresAtEpochMillis > now.toEpochMilli()) {
                 agent.releaseLease(task.id, claim.leaseOwner, claim.fencingToken, now.toEpochMilli())
             } else {
                 agent.expireLeaseForTask(task.id, now.toEpochMilli())

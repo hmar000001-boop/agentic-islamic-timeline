@@ -26,7 +26,7 @@ class PrayerCalculatorTest {
         val elapsedMinutes = java.time.Duration.between(previousSunset, sunrise).toMinutes()
         val wallClockMinutes = java.time.Duration.between(previous.maghrib, transitionDay.sunrise).toMinutes()
         assertTrue("The test interval must cross the spring DST jump", elapsedMinutes != wallClockMinutes)
-        val expectedFajr = transitionDay.sunrise!!.minusMinutes(kotlin.math.round(elapsedMinutes / 7.0).toLong())
+        val expectedFajr = transitionDay.sunrise.minusMinutes(kotlin.math.round(elapsedMinutes / 7.0).toLong())
         assertEquals(expectedFajr, transitionDay.fajr)
     }
 

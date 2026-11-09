@@ -78,6 +78,8 @@ jobs:
         run: python3 scripts/test-model-manager-contract.py
       - name: Verify JUnit 4 model-manager test method signatures
         run: python3 scripts/test-model-manager-junit-signatures.py
+      - name: Verify cross-module thermal status nullability handling
+        run: python3 scripts/test-thermal-status-cross-module-contract.py
       - name: Verify Phase 5B LiteRT-LM runtime contract
         run: python3 scripts/test-inference-runtime-contract.py
       - name: Verify Android model directory sync uses public SDK APIs

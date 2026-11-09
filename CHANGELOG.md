@@ -1,3 +1,12 @@
+## 0.7.0 CI hotfix — cross-module thermal status nullability (2026-11-09)
+
+- Hosted CI confirmed the JUnit 4 `ModelManagerTest` initialization fix: `:core:model-manager:testDebugUnitTest` now passes.
+- The next build blocker was `SMARTCAST_IMPOSSIBLE` at `TimelineApplication.kt:478`; the app was reading a nullable public property declared in another module twice in one condition.
+- Both app runtime preflight and `ModelManager.preflight()` now capture `thermalStatus` into a local immutable value before null/threshold checks; the preflight result reuses the captured observation.
+- Added unknown-thermal-status unit coverage and a CI source guard against direct cross-module nullable-property smart casts.
+- Cleaned non-fatal warnings from the supplied log: redundant `!!`, deprecated Material3 `Divider`, migration override parameter naming and authorization lease assertion.
+- No production policy, Room schema, app version metadata, dependency or feature scope changed.
+
 ## 0.7.0 CI hotfix — JUnit 4 Model Manager test initialization (2026-11-09)
 
 - Fixed `ModelManagerTest.cancellationDuringImportRollsBackStagingAndRegistry`: its expression body ended in a nullable `Job?.cancel()` expression, which Kotlin emitted as a JVM `kotlin.Unit` return instead of `void`. JUnit 4 requires every `@Test` method to be public, parameterless and `void`; the mismatch caused `InvalidTestClassError` before any Model Manager test could execute.

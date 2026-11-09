@@ -4,6 +4,10 @@
 **Current phase:** Phase 6 domain-engine foundation implemented in source; actual Gradle/KSP build, SQLCipher/API 36 instrumentation, user-device testing and scholarly rule-pack acceptance remain open. Phase 5C hosted/device acceptance is also pending from version 0.6.3.
 **Previous baseline:** Phase 0–4 implementation from 0.5.16; preserved incrementally.
 
+### 0.7.0 CI hotfix — cross-module thermal status smart cast (2026-11-09)
+
+The hosted Phase 6 unit-test command now passes `:core:model-manager:testDebugUnitTest`, confirming the prior JUnit 4 initialization fix. Compilation then exposed a Kotlin smart-cast error when the app read nullable `ModelResourceSnapshot.thermalStatus` directly across a module boundary. Both application runtime preflight and Model Manager now snapshot the nullable value once into a local immutable variable and use that stable value for the threshold decision. Added null-status unit coverage and a CI source guard. Also cleaned the non-fatal compiler warnings from the supplied run (publisher keyring null assertions, deprecated Material3 Divider, prayer-test null assertion, migration override parameter names, and authorization lease assertion). No domain behaviour, schema, dependency, offline policy or app version metadata changed.
+
 ### 0.7.0 CI hotfix — JUnit 4 Model Manager test signature
 
 Hosted CI reached the Model Manager unit-test task but JUnit 4 rejected `ModelManagerTest` during class initialization. The cancellation test's expression body returned Kotlin `Unit` because its final expression was a nullable `Job?.cancel()` call; JUnit 4 requires JVM `void`. It now uses a block body, preserving all test behavior, and a dedicated CI source guard protects the signature contract. No production code or app version metadata changed.

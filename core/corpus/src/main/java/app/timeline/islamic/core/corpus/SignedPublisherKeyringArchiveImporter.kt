@@ -55,7 +55,8 @@ class SignedPublisherKeyringArchiveImporter(private val manager: PublisherKeyrin
         }
         require(names == setOf("keyring.txt", "keyring.sig")) { "Archive must contain exactly keyring.txt and keyring.sig" }
         require(signature?.size == SIGNATURE_BYTES) { "Root Ed25519 signature must be exactly 64 bytes" }
-        return payload!! to signature!!
+        return requireNotNull(payload) { "Keyring payload is missing" } to
+            requireNotNull(signature) { "Keyring signature is missing" }
     }
 
     private companion object {

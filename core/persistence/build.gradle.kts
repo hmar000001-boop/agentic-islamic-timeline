@@ -21,4 +21,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    // AgentAuthorizationRoomTest exercises the authorization engine against the Room stores.
+    // Keep this dependency test-only; persistence main/runtime APIs do not depend on the engine.
+    androidTestImplementation(project(":core:authorization"))
 }

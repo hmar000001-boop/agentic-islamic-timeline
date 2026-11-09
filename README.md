@@ -1,3 +1,9 @@
+## 0.5.15 CI correction — persistence instrumentation test classpath
+
+The hosted API 36 emulator now passes startup and Gradle reaches Android-test Kotlin compilation. The persistence instrumentation source set exposed two compile-time defects: `AgentAuthorizationRoomTest` imports `AuthorizationEngine` but the persistence module had not declared `:core:authorization` on its Android-test classpath, and `RoomAuditLogTest` referenced a `context` local that existed only inside `setUp`. The authorization module is now an `androidTestImplementation` dependency only, and the Android `Context` is held as a fixture property initialized in `setUp`. No production dependency edge, runtime behavior, Room schema, encryption, corpus, or retrieval behavior changes. CI runs a dedicated source-set contract check before Gradle.
+
+**Version:** `0.5.15-phase4c-persistence-androidtest-compile-fix`
+
 ## 0.5.14 CI correction — unify API 36 AVD creation and lookup paths
 
 The latest hosted run passed the headless QEMU dependency preflight and started the Android Emulator launcher, but the emulator could not find `timeline-ci-api36.ini` under `$HOME/.android/avd`. The startup script now pins `ANDROID_USER_HOME`, `ANDROID_EMULATOR_HOME`, `ANDROID_AVD_HOME`, and the legacy `ANDROID_SDK_HOME` to compatible locations, removes an inherited conflicting `ANDROID_PREFS_ROOT`, and passes an explicit `--path` for the AVD data directory. After `avdmanager` exits, startup verifies both the root `.ini` registration and the AVD `config.ini` before launching the emulator. The regression suite checks conflicting inherited runner variables and that `avdmanager` and the emulator receive the same canonical paths. Real hosted AVD creation, guest boot, and instrumentation still require Actions confirmation.
@@ -25,7 +31,7 @@ The last hosted run successfully assembled `:app:assembleOfflineSideloadDebug` a
 
 # Timeline Agentique
 
-**Version:** `0.5.14-phase4c-api36-avd-home-fix`
+**Version:** `0.5.15-phase4c-persistence-androidtest-compile-fix`
 
 ## 0.5.7 CI correction — app compile classpath and symbols
 
@@ -57,7 +63,7 @@ The stable Compose BOM `2026.09.00` resolves Compose 1.12.1, whose Android artif
 
 # Timeline agentique — Android source foundation (Phases 1–4C)
 
-**Current source version:** `0.5.14-phase4c-api36-avd-home-fix`
+**Current source version:** `0.5.15-phase4c-persistence-androidtest-compile-fix`
 **Architecture:** `docs/reference/Cahier_architecture_Timeline_agentique_v1.2.md`
 **Readiness:** `docs/reference/Rapport_final_readiness_demarrage_Timeline_agentique.md`
 **Package ID:** provisional `app.timeline.islamic`

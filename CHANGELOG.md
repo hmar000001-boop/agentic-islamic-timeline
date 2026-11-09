@@ -1,3 +1,10 @@
+## 0.5.15-phase4c-persistence-androidtest-compile-fix — 2026-11-09
+
+- Fixed `:core:persistence:compileDebugAndroidTestKotlin`: added `:core:authorization` as an `androidTestImplementation` dependency because `AgentAuthorizationRoomTest` directly exercises `AuthorizationEngine`. The production `implementation`/`api` graph is unchanged.
+- Fixed `RoomAuditLogTest.missingHistoricalKeystoreKeyFailsClosedAndDoesNotResetChain`: promoted the Android `Context` from a setup-local variable to a fixture property so the test can reuse the same application context when constructing its second `KeystoreAuditMacProvider`.
+- Added a CI source-set contract regression test and run it before Gradle tasks.
+- Bumped app versionCode to 19 and versionName to `0.5.15-phase4c-persistence-androidtest-compile-fix`. No Room schema, migration, production runtime behavior, encryption policy, or feature behavior changed.
+
 ## 0.5.14-phase4c-api36-avd-home-fix — 2026-11-08
 - Fixed the API 36 startup failure in which the emulator launcher reported `Unknown AVD name [timeline-ci-api36]` and could not find its registration file under `$HOME/.android/avd`. The startup script previously relied on inherited/default Android configuration paths and did not verify that the AVD manager's output was discoverable by the emulator.
 - Pinned `ANDROID_USER_HOME` and `ANDROID_EMULATOR_HOME` to `$HOME/.android`, `ANDROID_AVD_HOME` to `$HOME/.android/avd`, and the legacy `ANDROID_SDK_HOME` to `$HOME`; cleared the deprecated conflicting `ANDROID_PREFS_ROOT`. All values are exported before either `avdmanager` or the emulator is invoked, so modern and legacy tool lookup paths converge.

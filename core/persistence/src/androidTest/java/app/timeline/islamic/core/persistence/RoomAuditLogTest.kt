@@ -16,11 +16,12 @@ import java.security.KeyStore
 
 @RunWith(AndroidJUnit4::class)
 class RoomAuditLogTest {
+    private lateinit var context: Context
     private lateinit var db: AppDatabase
     private lateinit var audit: RoomAuditLog
 
     @Before fun setUp() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        context = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
         audit = RoomAuditLog(db, KeystoreAuditMacProvider(context, "timeline.test.audit.${System.nanoTime()}"))
     }

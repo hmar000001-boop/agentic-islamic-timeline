@@ -308,3 +308,11 @@
 - Added `scripts/verify-compose-compile-sdk.py` and a CI step to enforce the compile/target/emulator split across all 15 Android modules.
 - No application behavior, permission, API target, data schema, or Phase 4 corpus logic changed.
 - CI log diagnosis: Kotlin compilation and Room KSP began; the build then failed at `:app:checkOfflineSideloadDebugAarMetadata` because 11 Compose 1.12.1 AARs require compileSdk 37. This is a compile-time metadata issue, not a Kotlin source failure.
+
+
+## 0.7.0 CI hotfix — API 26 BigInteger exact conversion
+
+- Replaced Android API 31 `BigInteger.longValueExact()` calls in inheritance and Zakat with a shared API 26-compatible exact converter that checks `Long.MIN_VALUE..Long.MAX_VALUE` before calling Kotlin `toLong()` (mapped to `BigInteger.longValue()`) and throws `ArithmeticException` on overflow.
+- Added boundary and overflow tests for the shared helper plus maximum-value domain regressions.
+- Added the common-module unit test task and a CI source guard that scans every Kotlin source file for reintroduction of `longValueExact()`.
+- No minSdk increase, arithmetic truncation, database change or religious-rule change.

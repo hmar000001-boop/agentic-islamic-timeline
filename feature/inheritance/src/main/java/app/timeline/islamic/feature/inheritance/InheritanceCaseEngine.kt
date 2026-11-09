@@ -1,5 +1,7 @@
 package app.timeline.islamic.feature.inheritance
 
+import app.timeline.islamic.core.common.toLongExactCompat
+
 import java.math.BigInteger
 
 /** Civil and fiqh context are separate; no heir share is inferred by this intake engine. */
@@ -82,7 +84,7 @@ object InheritanceCaseEngine {
         val funeral = sum(input, EstateAmountKind.FUNERAL_COST)
         val bequest = sum(input, EstateAmountKind.BEQUEST)
         val remaining = (BigInteger.valueOf(gross) - BigInteger.valueOf(secured) - BigInteger.valueOf(debts)
-            - BigInteger.valueOf(funeral) - BigInteger.valueOf(bequest)).max(BigInteger.ZERO).longValueExact()
+            - BigInteger.valueOf(funeral) - BigInteger.valueOf(bequest)).max(BigInteger.ZERO).toLongExactCompat()
         val status = when {
             !input.factsConfirmed -> DistributionStatus.NEEDS_CONFIRMED_FACTS
             input.selectedMadhhab == null || input.jurisdictionId.isBlank() -> DistributionStatus.NEEDS_JURISDICTION_AND_MADHHAB

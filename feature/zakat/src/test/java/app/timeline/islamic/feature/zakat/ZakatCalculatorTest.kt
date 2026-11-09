@@ -51,4 +51,14 @@ class ZakatCalculatorTest {
         assertEquals(null, result.amountMinor)
         assertTrue(result.calculationNote.contains("not a ruling"))
     }
+    @Test fun supportsMaximumLongAmountWithoutTruncation() {
+        val maximumRateProfile = profile().copy(rateBasisPoints = 10_000, nisabAmountMinor = 1)
+        val input = ZakatCaseInput("case-max", maximumRateProfile,
+            listOf(ZakatAssetInput(ZakatAssetCategory.CASH, MoneyAmount("CAD", Long.MAX_VALUE), LocalDate.of(2026,1,1), true)),
+            emptyList(), true, LocalDate.of(2025,1,1), LocalDate.of(2026,1,1))
+        val result = ZakatCalculator.calculate(input)
+        assertEquals(Long.MAX_VALUE, result.amountMinor)
+        assertEquals(ZakatCalculationStatus.PREVIEW_ONLY_RULES_UNVERIFIED, result.status)
+    }
+
 }

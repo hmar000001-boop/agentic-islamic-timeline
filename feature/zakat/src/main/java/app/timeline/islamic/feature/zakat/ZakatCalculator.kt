@@ -1,5 +1,7 @@
 package app.timeline.islamic.feature.zakat
 
+import app.timeline.islamic.core.common.toLongExactCompat
+
 import java.math.BigInteger
 import java.time.LocalDate
 
@@ -86,7 +88,7 @@ object ZakatCalculator {
             "Net value is below the user-entered threshold. Zero is only a mathematical comparison, not a religious conclusion.")
         val amount = BigInteger.valueOf(net).multiply(BigInteger.valueOf(profile.rateBasisPoints.toLong()))
             .add(BigInteger.valueOf(9_999)).divide(BigInteger.valueOf(10_000))
-            .longValueExact()
+            .toLongExactCompat()
         // Review flags and reviewer names are user data, not a cryptographic approval. Until a
         // signed scholar-approved ruleset registry is integrated, all results remain previews.
         return result(input, ZakatCalculationStatus.PREVIEW_ONLY_RULES_UNVERIFIED, assets, liabilities, net, amount,

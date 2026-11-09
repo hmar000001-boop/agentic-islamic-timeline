@@ -6,4 +6,4 @@ extensions.configure<LibraryExtension>("android") {
     defaultConfig { minSdk = 26 }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }
-dependencies { testImplementation(libs.junit) }
+dependencies { implementation(project(":core:common")); testImplementation(libs.junit) }

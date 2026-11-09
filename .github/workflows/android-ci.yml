@@ -76,6 +76,8 @@ jobs:
         run: python3 scripts/test-persistence-androidtest-contract.py
       - name: Verify Phase 5A offline model manager contract
         run: python3 scripts/test-model-manager-contract.py
+      - name: Verify JUnit 4 model-manager test method signatures
+        run: python3 scripts/test-model-manager-junit-signatures.py
       - name: Verify Phase 5B LiteRT-LM runtime contract
         run: python3 scripts/test-inference-runtime-contract.py
       - name: Verify Android model directory sync uses public SDK APIs

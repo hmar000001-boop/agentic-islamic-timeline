@@ -125,29 +125,35 @@ class ModelManagerTest {
     }
 
     @Test
-    fun cancellationDuringImportRollsBackStagingAndRegistry() = runBlocking {
-        val scope = CoroutineScope(Job() + Dispatchers.Unconfined)
-        lateinit var importJob: Job
-        var emitted = false
-        val source = object : InputStream() {
-            override fun read(): Int = -1
-            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-                if (emitted) return -1
-                emitted = true
-                bytes.copyInto(buffer, offset)
-                importJob.cancel()
-                return bytes.size
+    fun cancellationDuringImportRollsBackStagingAndRegistry() {
+        // Use a block body so Kotlin emits a JVM `void` method. A nullable final
+        // expression such as `scope.coroutineContext[Job]?.cancel()` otherwise
+        // makes this expression-bodied test return kotlin.Unit, which JUnit 4
+        // rejects while validating the entire test class.
+        runBlocking {
+            val scope = CoroutineScope(Job() + Dispatchers.Unconfined)
+            lateinit var importJob: Job
+            var emitted = false
+            val source = object : InputStream() {
+                override fun read(): Int = -1
+                override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                    if (emitted) return -1
+                    emitted = true
+                    bytes.copyInto(buffer, offset)
+                    importJob.cancel()
+                    return bytes.size
+                }
             }
+            importJob = scope.launch(start = CoroutineStart.LAZY) {
+                manager.import(spec.id) { source }
+            }
+            importJob.start()
+            importJob.join()
+            assertTrue(importJob.isCancelled)
+            assertTrue(registry.rows.isEmpty())
+            assertFalse(files.stagingFile(spec).exists())
+            scope.coroutineContext[Job]?.cancel()
         }
-        importJob = scope.launch(start = CoroutineStart.LAZY) {
-            manager.import(spec.id) { source }
-        }
-        importJob.start()
-        importJob.join()
-        assertTrue(importJob.isCancelled)
-        assertTrue(registry.rows.isEmpty())
-        assertFalse(files.stagingFile(spec).exists())
-        scope.coroutineContext[Job]?.cancel()
     }
 
     @Test

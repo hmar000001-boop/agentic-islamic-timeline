@@ -4,6 +4,10 @@
 **Current phase:** Phase 6 domain-engine foundation implemented in source; actual Gradle/KSP build, SQLCipher/API 36 instrumentation, user-device testing and scholarly rule-pack acceptance remain open. Phase 5C hosted/device acceptance is also pending from version 0.6.3.
 **Previous baseline:** Phase 0–4 implementation from 0.5.16; preserved incrementally.
 
+### 0.7.0 CI hotfix — JUnit 4 Model Manager test signature
+
+Hosted CI reached the Model Manager unit-test task but JUnit 4 rejected `ModelManagerTest` during class initialization. The cancellation test's expression body returned Kotlin `Unit` because its final expression was a nullable `Job?.cancel()` call; JUnit 4 requires JVM `void`. It now uses a block body, preserving all test behavior, and a dedicated CI source guard protects the signature contract. No production code or app version metadata changed.
+
 ### 0.6.2 CI hotfix — Android directory fsync API
 
 The first hosted Phase 5C unit-test build reached `:core:model-manager:compileDebugKotlin` and failed because `OsConstants.O_DIRECTORY` is not exported by Android's public SDK. The directory-sync code now opens with public `O_RDONLY`, verifies the directory path and opened descriptor with `lstat`/`fstat` and `S_ISDIR`, checks device/inode identity, then retains `fsync` and guaranteed close. A separate CI contract rejects hidden constants and missing durability checks. See `docs/reports/PHASE5C_CI_HOTFIX_ANDROID_DIRECTORY_SYNC_2026-11-09.md`.

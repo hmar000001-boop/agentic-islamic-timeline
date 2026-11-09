@@ -1,3 +1,10 @@
+## 0.7.0 CI hotfix — JUnit 4 Model Manager test initialization (2026-11-09)
+
+- Fixed `ModelManagerTest.cancellationDuringImportRollsBackStagingAndRegistry`: its expression body ended in a nullable `Job?.cancel()` expression, which Kotlin emitted as a JVM `kotlin.Unit` return instead of `void`. JUnit 4 requires every `@Test` method to be public, parameterless and `void`; the mismatch caused `InvalidTestClassError` before any Model Manager test could execute.
+- Converted the test to a block body without changing its cancellation scenario or assertions.
+- Added `test-model-manager-junit-signatures.py` and a CI step to guard the JUnit 4 signature contract and preserve the cancellation-cleanup coverage.
+- No production runtime behavior, database schema, dependency version, app versionCode or versionName changed. This is a test/CI-only correction to the 0.7.0 source candidate.
+
 ## 0.7.0-phase6-domain-engines — 2026-11-09
 
 - Continued incrementally from the recovered 0.6.3 Phase 5C source candidate; added seven separate deterministic offline domain libraries and a bilingual Compose domain hub reachable from the app navigation. App versionCode is 25; no new network permission or service is introduced.

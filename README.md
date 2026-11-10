@@ -1,5 +1,9 @@
 # Timeline Agentique
 
+## Governance and release evidence
+
+See [`docs/governance/`](docs/governance/README.md) for the source-rights register, scholarly review record, threat model, change-evidence policy and explicit release gates. A CI-generated offline sideload debug APK is a validation artifact, not a signed production release.
+
 **Current source:** `0.7.0-phase6-domain-engines` (versionCode 25)
 **Current phase:** Phase 6 domain-engine foundation implemented in source; actual Gradle/KSP build, SQLCipher/API 36 instrumentation, user-device testing and scholarly rule-pack acceptance remain open. Phase 5C hosted/device acceptance is also pending from version 0.6.3.
 **Previous baseline:** Phase 0–4 implementation from 0.5.16; preserved incrementally.

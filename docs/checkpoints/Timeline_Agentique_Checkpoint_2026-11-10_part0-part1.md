@@ -1,0 +1,71 @@
+# Timeline Agentique — Part 0/1 checkpoint
+
+**Date:** 2026-11-10  
+**Source archive:** `agentic-islamic-timeline-phase6-0.7.0-junit4-all-tests-hotfix.zip`  
+**Source SHA-256:** `e8f04ebe673b5848bca238909024b86d4f8cd7bc2736c6abc076c4fda2381966`  
+**Working tree:** fresh extraction under `timeline-phase0-1/agentic-islamic-timeline-0.7.0`; no previous extracted source tree was reused.  
+**Scope:** Part 0 (governance/build evidence) and Part 1 (local encrypted attachment persistence) only.
+
+## Part 0 — completed changes
+
+- Added `docs/governance/` with project governance, source/license registry, scholarly review-record template, release-gate matrix, threat model and change-evidence policy.
+- The register and review templates intentionally contain no pre-approved source or reviewer entries. They do not confer rights or scholarly approval.
+- Updated the README to point to the governance records.
+- Added CI static guards for the governance records.
+- Updated `.github/workflows/android-ci.yml` to create `SHA256SUMS.txt` for the offline sideload **debug validation APK**, upload that APK separately, and upload Gradle reports, test reports, dependency report, generated Room v7 schema (when present), SBOM/report output and dependency lockfiles as evidence. Artifacts are explicitly validation outputs, not signed release APKs.
+
+## Part 1 — completed changes
+
+- Added `EncryptedAttachmentStore` in `:core:security` with streaming AES-256-GCM, a distinct Android Keystore alias, provider-generated random 96-bit IV per file (not a caller-supplied IV, because Android Keystore rejects caller-provided IVs when randomized encryption is required), 128-bit GCM tag, and AAD binding ciphertext to format version and stable attachment ID.
+- Encrypted originals are stored under `noBackupFilesDir/attachments/v1`, with opaque stable filenames and a bounded default plaintext size of 25 MiB (hard cap 100 MiB).
+- Decryption fully verifies the GCM tag and independently checks the Room-stored byte count and SHA-256 before the callback receives an input stream. Temporary plaintext is written only into private app cache and removed in `finally`; startup reconciliation removes abandoned temp files.
+- Added `RoomDocumentAttachmentRepository`: import writes and fsyncs ciphertext before inserting SQLCipher metadata; failed metadata insertion attempts rollback; delete removes the Room row before removing ciphertext; reconciliation removes encrypted orphans and reports metadata rows whose file is missing. It does not silently recreate missing content.
+- Added DAO get/list/delete operations and application-level lazy repository access plus an explicit recovery method.
+- No Room entity, index or database version change was made. Room remains v7; no generated `7.json` has been fabricated.
+- Added JVM tests for encryption round-trip, distinct provider-generated IVs for repeated plaintext, ciphertext tampering, ID substitution, size limits, path traversal, missing-key fail-closed behavior and metadata hash checks, plus Android Room instrumentation tests for repository import/read/delete/recovery behavior and Android Keystore persistence/key-loss behavior.
+
+## Verification performed in this environment
+
+| Check | Result | Meaning |
+|---|---|---|
+| ZIP integrity and source hash | PASS | The exact received archive was verified before extraction |
+| Part 0 governance static check | PASS | Required governance records and current release-gate status exist; not legal or scholarly acceptance |
+| Part 1 attachment source contract | PASS | 18 source-level security contracts are present, including provider-generated IV and fail-visible recovery scanning; not a device security review |
+| Secret-pattern scan | PASS | Existing source scan found no configured secret patterns |
+| Kotlin syntax compile of store | PASS with API-shape stubs | Kotlin 1.9 compiler accepted the new store; not the project's Kotlin 2.4/AGP compilation |
+| Kotlin syntax compile of store + repository | PASS with Android/Room API-shape stubs | Kotlin 1.9 and local coroutine library accepted the provider-generated IV and cancellation-safe repository code; not generated Room/AGP compilation |
+| AES-GCM + repository runtime harness | PASS | JDK crypto plus Android/Room API-shaped stubs and an in-memory fake DAO exercised provider-generated IV round-trip, wrong-ID/tamper rejection, callback withholding, temp cleanup, max-size rejection, duplicate-metadata rollback, orphan recovery, deletion and key-loss fail-closed behavior; this is not real Room or Keystore execution |
+| Project Gradle build / real JUnit / Android instrumentation | BLOCKED / NOT RUN | No Android SDK variables, installed Gradle, or cached wrapper distribution; wrapper download was unavailable in this environment. The 9 new store test bodies were separately executed using local JUnit assertion shims and are not counted as Gradle/JUnit runs |
+| Generated Room v7 schema | BLOCKED | Must be generated by actual KSP build; `7.json` was not generated or fabricated |
+| Actual Android Keystore validation | NOT RUN | A device/emulator run is still required to validate Keystore-generated GCM IVs, key persistence and key-loss behavior on supported Android versions |
+| CI artifact upload | CONFIGURED / NOT RUN | Workflow change requires a hosted GitHub Actions run to prove artifact creation and download |
+
+The complete `scripts/*.py` suite was rerun after Parts 0 and 1: **27 passed, 2 expected environment blockers, 0 unexpected failures**. The blockers are `verify-android-sdk-platform.py` (no Android SDK path is configured) and `verify-room-schema-export.py` (KSP has not run, so no generated `7.json` exists). These source-only checks do not replace Gradle/AGP/KSP, SQLCipher instrumentation, emulator or physical-device checks.
+
+## Remaining risks and gates
+
+1. The new code has not been compiled by the project's pinned Gradle 9.5.0 / AGP 9.3.1 / Kotlin 2.4.21 toolchain. The first hosted CI result is mandatory; compiler/KSP/lint/test failures must be fixed before accepting Part 1.
+2. Android Keystore key persistence, invalidation, app upgrade, reinstall and Android API 26+ behavior need device/emulator tests. The new key provider intentionally refuses to replace an unreadable existing alias.
+3. The Android Room repository tests have been authored but have not run.
+4. No attachment UI, document viewer, external export/share path or automatic app-start recovery was added. The repository is exposed from `TimelineApplication`; callers must invoke the explicit reconciliation hook before relying on attachment metadata after process recovery.
+5. The existing `document_attachment` schema is retained. A future change to retention lifecycle, lifecycle state or relation ownership may require a separate migration proposal.
+6. The app's broader release remains NO-GO while religious source rights/review, real agent processor/handler/approval UI, corpus/model runtime, accessibility, backup/device-transfer and release-signing gates remain open.
+
+## Files changed
+
+- `.github/workflows/android-ci.yml`
+- `README.md`
+- `SECURITY.md`
+- `app/src/main/java/app/timeline/islamic/TimelineApplication.kt`
+- `core/security/build.gradle.kts`
+- `core/security/src/main/java/app/timeline/islamic/core/security/EncryptedAttachmentStore.kt`
+- `core/security/src/test/java/app/timeline/islamic/core/security/EncryptedAttachmentStoreTest.kt`
+- `core/security/src/androidTest/java/app/timeline/islamic/core/security/EncryptedAttachmentKeystoreTest.kt`
+- `core/persistence/src/main/java/app/timeline/islamic/core/persistence/Daos.kt`
+- `core/persistence/src/main/java/app/timeline/islamic/core/persistence/RoomDocumentAttachmentRepository.kt`
+- `core/persistence/src/androidTest/java/app/timeline/islamic/core/persistence/RoomDocumentAttachmentRepositoryTest.kt`
+- `scripts/verify-part0-governance.py`
+- `scripts/verify-part1-attachment-security.py`
+- `docs/governance/*`
+
+No code in later roadmap phases was changed.

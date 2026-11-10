@@ -4,4 +4,10 @@ extensions.configure<LibraryExtension>("android") { namespace = "app.timeline.is
 
 
 
-dependencies { api(project(":core:agent-api")) }
+dependencies {
+    api(project(":core:agent-api"))
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+}

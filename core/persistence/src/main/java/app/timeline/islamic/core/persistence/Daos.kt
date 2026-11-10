@@ -118,6 +118,9 @@ import kotlinx.coroutines.flow.Flow
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun putHifzReview(review: HifzReviewEntity)
     @Query("SELECT * FROM hifz_review WHERE planId = :planId ORDER BY reviewedAtEpochMillis DESC") suspend fun hifzReviews(planId: String): List<HifzReviewEntity>
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun putAttachment(attachment: DocumentAttachmentEntity)
+    @Query("SELECT * FROM document_attachment WHERE id = :id LIMIT 1") suspend fun attachment(id: String): DocumentAttachmentEntity?
+    @Query("SELECT * FROM document_attachment ORDER BY importedAtEpochMillis DESC, id COLLATE BINARY ASC") suspend fun attachments(): List<DocumentAttachmentEntity>
+    @Query("DELETE FROM document_attachment WHERE id = :id") suspend fun deleteAttachment(id: String): Int
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putCanvasArtifact(artifact: CanvasArtifactEntity)
 }
 

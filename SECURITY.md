@@ -25,15 +25,25 @@
 - The local audit table stores payload hashes rather than private payloads; event HMACs are created with an Android Keystore HMAC-SHA256 key and verified before agent recovery.
 - Audit chaining is tamper-evident for modified/reordered records and missing historical keys, but it has no independent anti-truncation anchor. Deletion of the full tail or table cannot be detected from the remaining local chain alone.
 
+## Attachment encryption and lifecycle (Part 1)
+
+- Attachment originals are streamed into `noBackupFilesDir/attachments/v1` and encrypted with AES-256-GCM. Each file uses a fresh provider-generated 96-bit IV (the Android Keystore-backed Cipher generates it) and a 128-bit authentication tag; the authenticated additional data binds the payload to its format version and stable attachment ID.
+- The attachment key is a non-exportable Android Keystore AES key under alias `app.timeline.islamic.attachment.aes.v1`. An existing but unreadable alias is treated as invalidated; the provider refuses to generate a replacement whenever encrypted payload files exist, preventing silent orphaning of old ciphertext.
+- SQLCipher Room stores only attachment metadata: opaque ID, relative encrypted path, MIME type, plaintext byte count, SHA-256, retention-policy identifier and import timestamp. The database schema remains v7.
+- Decryption completes GCM tag verification and independent byte-count/SHA-256 checks before the consumer callback receives a stream. Temporary plaintext is placed in app-private cache, not the attachment directory, and is removed in a `finally` block. Startup reconciliation removes abandoned temporary files.
+- Import commits ciphertext before Room metadata; metadata failure triggers encrypted-file rollback. A process death in that gap can leave an encrypted orphan, which reconciliation removes. Delete removes metadata first; a remaining encrypted orphan is also removed by reconciliation. A metadata row with a missing file is reported, never repaired by generating empty content.
+- The repository is exposed from `TimelineApplication`, with an explicit `reconcileDocumentAttachments()` recovery hook. No attachment viewer, external export/share flow or automatic recovery scheduling is claimed as implemented yet.
+- Required before release: actual Android Keystore persistence/invalidation tests, process-kill recovery tests, Room integration tests, API 26–36 emulator/device coverage and a review of every plaintext consumer/export path.
+
 ## Release requirements not satisfied by this source tranche
 
-- Execute SQLCipher + Room migration/reopen/recovery tests on API 26, 29, 33 and 36, arm64-v8a and x86_64; verify migration 1→2→3→4 and commit KSP-generated schema v4 JSON.
+- Execute SQLCipher + Room migration/reopen/recovery tests on API 26, 29, 33 and 36, arm64-v8a and x86_64; validate the full migration chain through v7 and commit the KSP-generated `core/persistence/schemas/7.json` produced by a real Android Gradle/KSP build.
 - Run instrumented concurrency tests for simultaneous `beginExecution` claims, grant revocation/expiry races, task lease fencing and atomic execution/outbox/audit writes.
-- Key invalidation and restore/recovery threat analysis on supported Samsung/Pixel devices.
+- Database-key and attachment-key invalidation, app upgrade, reinstall and restore/recovery threat analysis on supported Samsung/Pixel devices.
 - Dependency vulnerability and license review for every release dependency.
 - OWASP MASVS review and privacy/Play declaration review.
 - Pin and review a production Ed25519 publisher root key; define root-key rotation and incident response; do not enable pack imports before this gate.
-- Test canonical keyring parsing, publisher-key history/revocation, transactional update rollback, SAF import, Room migration 3→4 and pack quarantine/removal lifecycle on supported Android versions.
+- Test canonical keyring parsing, publisher-key history/revocation, transactional update rollback, SAF import, pack quarantine/removal lifecycle and the complete Room migration chain through v7 on supported Android versions.
 - The local monotonic keyring version has no independent hardware anti-rollback anchor against restoration of an older full encrypted database image.
 
 

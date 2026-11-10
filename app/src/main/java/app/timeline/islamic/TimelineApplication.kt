@@ -36,6 +36,9 @@ import app.timeline.islamic.core.persistence.RoomCorpusPackRegistry
 import app.timeline.islamic.core.persistence.RoomPublisherKeyringStore
 import app.timeline.islamic.core.persistence.RoomDenseEmbeddingIndexStore
 import app.timeline.islamic.core.persistence.RoomDomainWorkspaceRepository
+import app.timeline.islamic.core.persistence.RoomDocumentAttachmentRepository
+import app.timeline.islamic.core.persistence.AttachmentRecoveryReport
+import app.timeline.islamic.core.security.EncryptedAttachmentStore
 import app.timeline.islamic.core.retrieval.BundledSqliteCorpusIndex
 import app.timeline.islamic.core.retrieval.LocalEmbeddingIndexBuilder
 import app.timeline.islamic.core.retrieval.LocalCorpusRetriever
@@ -78,6 +81,13 @@ class TimelineApplication : Application() {
     // Lazy access keeps UI startup independent from a model; storage errors remain explicit.
     val database by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { EncryptedDatabaseFactory.get(this) }
     val domainWorkspaceRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { RoomDomainWorkspaceRepository(database) }
+    /** Attachments are independently AES-GCM encrypted under Android Keystore, outside Room. */
+    val documentAttachmentRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        RoomDocumentAttachmentRepository(database, EncryptedAttachmentStore(this))
+    }
+
+    /** Explicit startup recovery hook; missing referenced files are surfaced, never recreated. */
+    suspend fun reconcileDocumentAttachments(): AttachmentRecoveryReport = documentAttachmentRepository.reconcile()
     private val taskStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { RoomAgentTaskStore(database) }
     private val authorizationStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { RoomAuthorizationStore(database, KeystoreAuditMacProvider(this)) }
     private val authorizationEngine by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { AuthorizationEngine(authorizationStore) }

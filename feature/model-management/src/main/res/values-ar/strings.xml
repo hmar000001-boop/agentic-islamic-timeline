@@ -1,0 +1,33 @@
+<resources>
+    <string name="models_title">النماذج على الجهاز</string>
+    <string name="models_back">رجوع</string>
+    <string name="models_refresh">تحديث</string>
+    <string name="models_offline_notice">تُستورد ملفات النماذج محليًا من مستند تختاره. لا ينزّل التطبيق أي نموذج.</string>
+    <string name="models_inactive_notice">الملف المتحقق منه ليس نموذجًا نشطًا. يظل الاستدلال غير متاح حتى يجتاز محرك محلي متوافق اختبار التحميل.</string>
+    <string name="models_inventory_unavailable">تعذرت قراءة سجل النماذج المشفر. تم تعطيل الاستيراد حتى يتوفر التخزين.</string>
+    <string name="models_not_installed">غير مثبت</string>
+    <string name="models_installing">يلزم استرداد عملية التثبيت</string>
+    <string name="models_verified_not_active">تم التحقق من الملف · المحرك غير نشط</string>
+    <string name="models_quarantined">معزول · فشل فحص السلامة أو دورة الحياة</string>
+    <string name="models_removal_pending">الإزالة معلقة · يلزم إعادة المحاولة</string>
+    <string name="models_artifact_size">حجم الملف المحدد: %1$d ميغابايت</string>
+    <string name="models_license">الترخيص المعلن: %1$s</string>
+    <string name="models_minimum_ram">الحد الأدنى للذاكرة في قائمة الناشر: %1$d غيغابايت (ليس ضمانًا للتوافق)</string>
+    <string name="models_import">استيراد ملف</string>
+    <string name="models_remove">إزالة</string>
+    <string name="models_preflight">فحص الموارد</string>
+    <string name="models_preflight_low_memory">يشير Android حاليًا إلى انخفاض الذاكرة. أغلق التطبيقات الأخرى قبل اختبار تحميل المحرك.</string>
+    <string name="models_preflight_device_ram">ذاكرة الجهاز أقل من الحد المرجعي للناشر. هذا ليس حكمًا نهائيًا على التوافق.</string>
+    <string name="models_preflight_storage">المساحة الخاصة غير كافية لحجم النموذج واحتياطي المساحة الحرة المطلوب.</string>
+    <string name="models_preflight_thermal">درجة حرارة الجهاز مرتفعة. أعد المحاولة بعد أن يبرد.</string>
+    <string name="models_preflight_runtime_probe">اجتازت تقديرات الموارد الفحص. ما زال اختبار تحميل LiteRT-LM الفعلي مطلوبًا؛ الاستدلال غير نشط.</string>
+    <string name="models_runtime_unloaded">محرك التوليد غير محمّل.</string>
+    <string name="models_runtime_loading">جارٍ تحميل النموذج المحلي على وحدة المعالجة المركزية…</string>
+    <string name="models_runtime_ready">محرك التوليد المحلي جاهز (CPU).</string>
+    <string name="models_runtime_generating">جارٍ التوليد محليًا…</string>
+    <string name="models_runtime_failed">تعذر تشغيل المحرك المحلي: %1$s</string>
+    <string name="models_runtime_smoke_result">نتيجة اختبار المحرك المؤقتة (لا يتم حفظها):</string>
+    <string name="models_runtime_load_cpu">تحميل على CPU</string>
+    <string name="models_runtime_test">اختبار محلي</string>
+    <string name="models_runtime_unload">إلغاء التحميل</string>
+</resources>

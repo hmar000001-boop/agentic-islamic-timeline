@@ -1,0 +1,143 @@
+name: Android CI
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout (pinned)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Select preinstalled JDK 21 for LiteRT-LM
+        run: |
+          test -n "$JAVA_HOME_21_X64"
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          printf 'JAVA_HOME=%s\n' "$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          "$JAVA_HOME_21_X64/bin/java" -version
+      - name: Locate Android SDK tools
+        run: |
+          test -n "$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | sort | tail -1)"; fi
+          test -x "$SDKMANAGER"
+          AVDMANAGER="${SDKMANAGER%/sdkmanager}/avdmanager"
+          test -x "$AVDMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          echo "AVDMANAGER=$AVDMANAGER" >> "$GITHUB_ENV"
+      - name: Install Linux runtime library required by Android Emulator QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libpulse0
+          dpkg-query -W -f='${Status}\n' libpulse0 | grep -qx 'install ok installed'
+      - name: Install Android SDK platform and emulator image
+        run: |
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "platforms;android-37.0" "build-tools;36.0.0" "emulator" "system-images;android-36;google_apis;x86_64"
+          # GitHub-hosted runners do not guarantee platform-tools is on PATH.
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          if [ ! -x "$ADB" ]; then
+            echo "sdkmanager completed but adb is missing: $ADB" >&2
+            ls -la "$ANDROID_HOME/platform-tools" >&2 || true
+            exit 1
+          fi
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "ADB=$ADB" >> "$GITHUB_ENV"
+          "$ADB" version
+          python3 scripts/verify-android-sdk-platform.py
+      - name: Test API 36 emulator tool discovery and startup contract
+        run: python3 scripts/test-api36-emulator-setup.py
+      - name: Verify complete English and Arabic string resources
+        run: |
+          python3 scripts/test-string-translations.py
+          python3 scripts/verify-string-translations.py
+      - name: Scan source for common secret patterns
+        run: python3 scripts/secret-scan.py
+      - name: Validate Room v7, encrypted dense-index and domain-workspace migrations
+        run: python3 scripts/check-phase4-schema.py
+      - name: Verify Phase 5C fingerprinted dense retrieval on Room v7
+        run: python3 scripts/test-phase5c-dense-retrieval-contract.py
+      - name: Execute Phase 5C dense indexing source SQL contract
+        run: python3 scripts/test-phase5c-readbatch-sql.py
+      - name: Verify Phase 6 domain engines and encrypted workspace contracts
+        run: python3 scripts/verify-phase6-domain-workspace.py
+      - name: Verify Phase 6 deterministic domain-engine safety contracts
+        run: python3 scripts/test-phase6-domain-engines.py
+      - name: Verify Room dense-index persistence contract
+        run: python3 scripts/verify-room-dense-index-contract.py
+      - name: Verify persistence Android-test dependencies and fixtures
+        run: python3 scripts/test-persistence-androidtest-contract.py
+      - name: Verify Phase 5A offline model manager contract
+        run: python3 scripts/test-model-manager-contract.py
+      - name: Verify all JUnit 4 unit and Android test method signatures
+        run: python3 scripts/test-model-manager-junit-signatures.py
+      - name: Verify cross-module thermal status nullability handling
+        run: python3 scripts/test-thermal-status-cross-module-contract.py
+      - name: Verify Phase 5B LiteRT-LM runtime contract
+        run: python3 scripts/test-inference-runtime-contract.py
+      - name: Verify Android model directory sync uses public SDK APIs
+        run: python3 scripts/test-android-model-directory-sync-contract.py
+      - name: Verify app compile-time module API contracts
+        run: python3 scripts/verify-app-module-compile-contract.py
+      - name: Test Gradle bootstrap executable permissions
+        run: python3 scripts/test-gradle-bootstrap.py
+      - name: Test AGP built-in Kotlin migration policy
+        run: python3 scripts/test-built-in-kotlin.py
+      - name: Verify AGP built-in Kotlin and public DSL migration
+        run: python3 scripts/verify-built-in-kotlin.py
+      - name: Verify static dependency versions and lock policy
+        run: python3 scripts/verify-gradle-reproducibility.py
+      - name: Verify Phase 4C corpus UI and encrypted embedding foundation
+        run: python3 scripts/check-phase4c-foundation.py
+      - name: Test API 37.0 SDK package validation
+        run: python3 scripts/test-android-sdk-platform.py
+      - name: Verify Compose compile SDK and runtime target split
+        run: python3 scripts/verify-compose-compile-sdk.py
+      - name: Verify Gradle distribution
+        run: ./gradlew --version
+      - name: Verify API 26 compatible exact BigInteger conversion
+        run: python3 scripts/test-api26-biginteger-conversion.py
+      - name: Unit tests and write dependency locks
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :core:common:testDebugUnitTest :app:testOfflineSideloadDebugUnitTest :core:authorization:testDebugUnitTest :core:agent-runtime:testDebugUnitTest :core:timeline-api:testDebugUnitTest :core:persistence:testDebugUnitTest :core:knowledge-api:testDebugUnitTest :core:corpus:testDebugUnitTest :core:retrieval:testDebugUnitTest :core:model-manager:testDebugUnitTest :core:inference-runtime:testDebugUnitTest :core:domain-api:testDebugUnitTest :feature:timeline:testDebugUnitTest :feature:canvas:testDebugUnitTest :feature:corpus-management:testDebugUnitTest :feature:model-management:testDebugUnitTest :feature:prayer:testDebugUnitTest :feature:hifz:testDebugUnitTest :feature:travel:testDebugUnitTest :feature:halal:testDebugUnitTest :feature:zakat:testDebugUnitTest :feature:inheritance:testDebugUnitTest :feature:community-local:testDebugUnitTest
+      - name: Assemble and lint
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:assembleOfflineSideloadDebug :app:lintOfflineSideloadDebug :core:corpus:lint :core:retrieval:lint :core:model-manager:lint :core:inference-runtime:lint :core:domain-api:lint :feature:corpus-management:lint :feature:model-management:lint :feature:prayer:lint :feature:hifz:lint :feature:travel:lint :feature:halal:lint :feature:zakat:lint :feature:inheritance:lint :feature:community-local:lint :feature:domain-hub:lint
+      - name: Verify generated Room v7 schema snapshot
+        run: python3 scripts/verify-room-schema-export.py
+      - name: Audit offline merged manifest
+        run: |
+          ./gradlew --no-daemon --no-configuration-cache --write-locks :app:processOfflineSideloadDebugMainManifest
+          MANIFEST="$(find app/build/intermediates -type f -path '*offlineSideloadDebug*' -name AndroidManifest.xml | grep -E 'merged_manifest|merged_manifests' | head -1)"
+          test -n "$MANIFEST" && test -f "$MANIFEST"
+          if grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            echo "Forbidden INTERNET permission found in offline manifest: $MANIFEST" >&2
+            exit 1
+          fi
+      - name: Start API 36 emulator
+        run: |
+          bash scripts/start-api36-emulator.sh
+      - name: Instrumented Android tests
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:connectedOfflineSideloadDebugAndroidTest :core:persistence:connectedDebugAndroidTest :core:corpus:connectedDebugAndroidTest :core:retrieval:connectedDebugAndroidTest :core:model-manager:connectedDebugAndroidTest :core:inference-runtime:connectedDebugAndroidTest
+      - name: Dependency resolution report
+        if: always()
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks :app:dependencies --configuration offlineSideloadDebugRuntimeClasspath > dependency-report.txt
+      - name: CycloneDX SBOM
+        if: always()
+        run: ./gradlew --no-daemon --no-configuration-cache --write-locks cyclonedxBom
+
+      - name: Upload generated dependency lockfiles
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gradle-dependency-lockfiles
+          path: |
+            **/gradle.lockfile
+            **/buildscript-gradle.lockfile
+          if-no-files-found: warn
+          retention-days: 30

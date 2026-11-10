@@ -118,3 +118,9 @@ The earlier guard required `directory.canonicalFile == directory.absoluteFile`. 
 
 The correction is therefore source- and JVM-harness-verified, but Part 2 is not accepted until the same hosted `connectedAndroidTest` command is rerun on API 36. The rerun must show the Keystore and Room repository tests passing. No Room schema change or migration is part of this fix.
 
+
+## Hosted CI acceptance follow-up — 2026-11-10
+
+The user subsequently confirmed that the hosted CI rerun is green after the canonical Android private-directory correction. This closes the previously failing API 36 connected test gate for the two `EncryptedAttachmentKeystoreTest` cases in `:core:security` and four `RoomDocumentAttachmentRepositoryTest` cases in `:core:persistence`, together with the rest of the Parts 0–2 workflow as run by the user. The successful GitHub Actions detail log was not included in this workspace, so this status is recorded as **user-confirmed**, not independently audited here. The historical failure and correction above are retained for traceability.
+
+Parts 0–2 are therefore complete as implementation increments and their hosted CI acceptance is user-confirmed. This is not a production release sign-off: physical-device security/backup tests, offline runtime network denial, signed source-rights evidence, scholarly review, model/device performance, accessibility/RTL review and production signing remain independent release gates.

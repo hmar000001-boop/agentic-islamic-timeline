@@ -1,3 +1,12 @@
+## 0.7.0 Part 3 — private attachment workflow (2026-11-10)
+
+- Added a bilingual attachment-management destination and SAF import for PDF/plain text. The app validates allowed MIME types, normalizes MIME metadata, validates PDF signatures and sends the stream directly to existing AES-GCM storage. Provider URI grants are not retained.
+- Added a metadata list (type, size, import time), authenticated text/PDF preview, PDF page controls and explicit delete confirmation. Source filenames are intentionally not retained; a future persisted display name needs a sanitized SQLCipher metadata field and a reviewed Room v8 migration.
+- Text previews are strict UTF-8 and limited to 64 KiB. PDF preview enforces 25 MiB, 1,000-page, 1,440-pixel-edge and 4 MP bitmap bounds. Temporary PDF plaintext exists only under the private cache, is deleted after render, and is recovered by a feature-scoped startup cleanup.
+- All operations use the Part 2 recovery-gated `TimelineApplication` facade. Room remains v7. `USER_MANAGED` is a metadata policy identifier, not an expiry scheduler. No external share/export path or network permission was added.
+- Added import-policy unit tests, cache/PDF instrumentation tests, Compose readiness/import/delete-confirmation tests and a Part 3 static CI guard. Hosted CI for this Part 3 delta is pending.
+- Parts 0–2 are closed as implementation increments after the user confirmed the hosted API 36 CI rerun is green following the canonical Android private-directory correction. Overall production release remains subject to the independent governance and device gates.
+
 ## 0.7.0 Part 2 — process startup and attachment recovery (2026-11-10)
 
 - Added a serialized, observable attachment-recovery coordinator with explicit `NotStarted`, `Running`, `Ready` and `Failed` states. Successful startup recovery is cached for the process; failed recovery requires an explicit retry; coroutine cancellation resets to `NotStarted` and propagates.

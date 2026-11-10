@@ -4,16 +4,30 @@
 
 See [`docs/governance/`](docs/governance/README.md) for the source-rights register, scholarly review record, threat model, change-evidence policy and explicit release gates. A CI-generated offline sideload debug APK is a validation artifact, not a signed production release.
 
+### Part 3 — private attachment workflow (2026-11-10)
+
+- Adds a bilingual Private Documents screen with a SAF importer for PDF and plain text, metadata-only listing, authenticated local preview, PDF page navigation and explicit delete confirmation.
+- Import is bounded to the existing 25 MiB encrypted-store limit. PDF preview is bounded by file size, page count and bitmap dimensions; text preview is strict UTF-8 and limited to 64 KiB.
+- No provider URI permission is retained. PDF preview uses a short-lived app-private cache file that is deleted after rendering and cleaned by a narrowly scoped startup pass after process death.
+- Source filenames are intentionally not retained; items are distinguished by type, size and import time. A persistent display name would require sanitization and a separately reviewed Room v8 migration.
+- Retention is identified as `USER_MANAGED`, but no expiry scheduler is part of this increment. No share/export path or Room migration is added.
+- Part 3 source guard and unit/Compose/instrumentation tests are wired into CI. The Part 3 hosted run is pending; source-level and API-shaped harness checks do not substitute for the hosted Android build.
+- See [`docs/reports/PART3_ATTACHMENT_WORKFLOW_REPORT_2026-11-10.md`](docs/reports/PART3_ATTACHMENT_WORKFLOW_REPORT_2026-11-10.md) and [`docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-10_part3.md`](docs/checkpoints/Timeline_Agentique_Checkpoint_2026-11-10_part3.md).
+
+### Parts 0–2 acceptance update (2026-11-10)
+
+The user confirmed that the hosted CI rerun is green after the Android canonical-private-path correction. This closes Parts 0–2 implementation/CI acceptance, including the prior API 36 Keystore and attachment-repository failures. This record is based on user confirmation in this conversation; the successful GitHub Actions detail log was not attached here. It does not close the independent production release gates below.
+
 ### Part 2 — process startup and attachment recovery integration (2026-11-10)
 
 - The Application now starts encrypted attachment reconciliation in a process-owned I/O scope. Activity recreation no longer restarts or cancels the attachment recovery attempt.
 - Attachment operations are exposed through gated application APIs and remain unavailable until recovery reports `Ready`. A failed scan is visible and can be explicitly retried; missing referenced files are reported without deleting their Room metadata or exposing file paths/IDs in the UI.
 - Agent audit/task recovery is also launched from the Application scope rather than the Activity lifecycle, so it is not cancelled by Activity recreation. Its existing independent fail-closed readiness gate remains unchanged.
 - Arabic and English recovery status strings and a CI source guard were added. Room stays at v7; this part adds no database migration, network permission or background service.
-- Source tests cover one-time initialization, concurrent callers, explicit retry after failure and cancellation propagation/reset. Actual Gradle/JUnit and Android/Keystore/SQLCipher execution still require hosted CI/device validation.
+- Source tests cover one-time initialization, concurrent callers, explicit retry after failure and cancellation propagation/reset. The user-confirmed green hosted CI rerun on API 36 closes the Part 2 Keystore/Room test failure; physical-device acceptance and wider release gates remain open.
 
 **Current source:** `0.7.0-phase6-domain-engines` (versionCode 25)
-**Current phase:** Phase 6 domain-engine foundation implemented in source; actual Gradle/KSP build, SQLCipher/API 36 instrumentation, user-device testing and scholarly rule-pack acceptance remain open. Phase 5C hosted/device acceptance is also pending from version 0.6.3.
+**Current increment:** Part 3 private attachment workflow implemented in source; hosted CI and physical-device acceptance are pending for this delta. Parts 0–2 have user-confirmed green hosted CI. Independent production-release gates remain open.
 **Previous baseline:** Phase 0–4 implementation from 0.5.16; preserved incrementally.
 
 ### 0.7.0 CI hotfix — Room v7 migration SQL verifier receiver (2026-11-09)

@@ -69,6 +69,7 @@ import java.io.InputStream
 import app.timeline.islamic.feature.corpus.CorpusManagementUiState
 import app.timeline.islamic.feature.corpus.CorpusPackUiItem
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -80,6 +81,7 @@ import kotlinx.coroutines.sync.withLock
 class TimelineApplication : Application() {
     // Process-owned recovery survives Activity recreation and always runs on an I/O dispatcher.
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val attachmentPreviewCacheCleanup = CompletableDeferred<Unit>()
     @Volatile var agentRuntimeReady: Boolean = false
         private set
     @Volatile var agentRuntimeFailureCode: String? = null
@@ -106,6 +108,16 @@ class TimelineApplication : Application() {
         super.onCreate()
         // Recovery is intentionally asynchronous: the Timeline remains available while the
         // attachment-only store is checked, but attachment operations remain gated until READY.
+        applicationScope.launch {
+            // A process killed during PDF preview may leave only a private-cache plaintext
+            // temporary file. Do not permit another PDF preview until cleanup has completed.
+            try {
+                AttachmentPreviewLoader.cleanupOrphanedPreviews(cacheDir)
+                attachmentPreviewCacheCleanup.complete(Unit)
+            } catch (failure: Exception) {
+                attachmentPreviewCacheCleanup.completeExceptionally(failure)
+            }
+        }
         applicationScope.launch { attachmentRecoveryCoordinator.initialize() }
         applicationScope.launch {
             try {
@@ -121,6 +133,10 @@ class TimelineApplication : Application() {
     suspend fun retryDocumentAttachmentRecovery(): AttachmentRecoveryState =
         attachmentRecoveryCoordinator.retry()
 
+    suspend fun ensureAttachmentPreviewCacheReady() {
+        attachmentPreviewCacheCleanup.await()
+    }
+
     private fun requireDocumentAttachmentStorageReady() {
         check(attachmentRecoveryCoordinator.state.value is AttachmentRecoveryState.Ready) {
             "Encrypted attachment recovery has not completed successfully"
@@ -130,10 +146,18 @@ class TimelineApplication : Application() {
     suspend fun importDocumentAttachment(
         content: InputStream,
         mimeType: String,
-        retentionPolicy: String
+        retentionPolicy: String = AttachmentImportPolicy.RETENTION_POLICY_USER_MANAGED
     ): DocumentAttachmentEntity {
         requireDocumentAttachmentStorageReady()
-        return documentAttachmentRepository.import(content, mimeType, retentionPolicy)
+        require(retentionPolicy == AttachmentImportPolicy.RETENTION_POLICY_USER_MANAGED) {
+            "Unsupported attachment retention policy"
+        }
+        val validated = AttachmentImportPolicy.validate(content, mimeType)
+        return documentAttachmentRepository.import(
+            validated.stream,
+            validated.mimeType,
+            retentionPolicy
+        )
     }
 
     suspend fun listDocumentAttachments(): List<DocumentAttachmentEntity> {

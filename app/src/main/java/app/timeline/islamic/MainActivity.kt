@@ -26,6 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.lifecycleScope
 import app.timeline.islamic.core.persistence.RoomCanvasRepository
+import app.timeline.islamic.core.persistence.AttachmentDeleteResult
+import app.timeline.islamic.core.persistence.AttachmentRecoveryState
+import app.timeline.islamic.core.security.AttachmentTooLargeException
 import app.timeline.islamic.core.persistence.RoomTimelineRepository
 import app.timeline.islamic.feature.canvas.CanvasFeature
 import app.timeline.islamic.feature.corpus.CorpusManagementFeature
@@ -38,15 +41,18 @@ import app.timeline.islamic.feature.models.ModelManagementFeature
 import app.timeline.islamic.feature.models.ModelManagementUiState
 import app.timeline.islamic.feature.timeline.TimelineFeature
 import app.timeline.islamic.feature.domainhub.DomainHubFeature
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class AppDestination { TIMELINE, CANVAS, CORPUS, MODELS, DOMAINS }
+private enum class AppDestination { TIMELINE, CANVAS, CORPUS, MODELS, DOMAINS, ATTACHMENTS }
 
 class MainActivity : ComponentActivity() {
     private var corpusState by mutableStateOf(CorpusManagementUiState())
     private var modelState by mutableStateOf(ModelManagementUiState())
+    private var attachmentState by mutableStateOf(AttachmentManagementUiState())
+    private var previewRequestGeneration = 0L
     private var pendingPackUpdateTarget: CorpusPackUiItem? = null
     private var pendingModelImportId: String? = null
 
@@ -69,6 +75,10 @@ class MainActivity : ComponentActivity() {
         if (uri != null && modelId != null) performModelAction { importModelArtifact(uri, modelId) }
     }
 
+    private val openAttachmentDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) performAttachmentImport(uri)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingModelImportId = savedInstanceState?.getString(STATE_PENDING_MODEL_IMPORT_ID)
@@ -89,9 +99,26 @@ class MainActivity : ComponentActivity() {
                         }
                         var destination by androidx.compose.runtime.remember { mutableStateOf(AppDestination.TIMELINE) }
                         LaunchedEffect(Unit) { refreshCorpusScreen() }
+                        LaunchedEffect(destination) {
+                            if (destination != AppDestination.ATTACHMENTS && attachmentState.preview != null) {
+                                dismissAttachmentPreview()
+                            }
+                        }
+                        LaunchedEffect(destination, attachmentRecovery) {
+                            if (destination == AppDestination.ATTACHMENTS) {
+                                if (attachmentRecovery is AttachmentRecoveryState.Ready) {
+                                    refreshAttachmentScreen()
+                                } else {
+                                    attachmentState = attachmentState.copy(
+                                        loading = false,
+                                        message = AttachmentUiMessage.STORAGE_NOT_READY
+                                    )
+                                }
+                            }
+                        }
                         Column(Modifier.fillMaxSize()) {
                             when (val recovery = attachmentRecovery) {
-                                is app.timeline.islamic.core.persistence.AttachmentRecoveryState.Failed -> {
+                                is AttachmentRecoveryState.Failed -> {
                                     Column(Modifier.fillMaxWidth()) {
                                         Text(stringResource(R.string.app_attachment_recovery_failed))
                                         TextButton(onClick = {
@@ -103,7 +130,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 }
-                                is app.timeline.islamic.core.persistence.AttachmentRecoveryState.Ready -> {
+                                is AttachmentRecoveryState.Ready -> {
                                     val missingCount = recovery.report.missingDatabaseReferencedFiles.size
                                     if (missingCount > 0) {
                                         Text(
@@ -115,8 +142,8 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 }
-                                app.timeline.islamic.core.persistence.AttachmentRecoveryState.NotStarted,
-                                app.timeline.islamic.core.persistence.AttachmentRecoveryState.Running -> Unit
+                                AttachmentRecoveryState.NotStarted,
+                                AttachmentRecoveryState.Running -> Unit
                             }
                             Box(Modifier.weight(1f).fillMaxWidth()) {
                                 when (destination) {
@@ -164,6 +191,22 @@ class MainActivity : ComponentActivity() {
                                         repository = timelineApplication.domainWorkspaceRepository,
                                         onBack = { destination = AppDestination.TIMELINE }
                                     )
+                                    AppDestination.ATTACHMENTS -> AttachmentManagementFeature(
+                                        state = attachmentState,
+                                        recoveryReady = attachmentRecovery is AttachmentRecoveryState.Ready,
+                                        onBack = {
+                                            dismissAttachmentPreview()
+                                            destination = AppDestination.TIMELINE
+                                        },
+                                        onImport = { openAttachmentDocument.launch(ATTACHMENT_MIME_TYPES) },
+                                        onRefresh = ::refreshAttachmentScreen,
+                                        onPreview = { item -> loadAttachmentPreview(item, 0) },
+                                        onRequestDelete = { item -> attachmentState = attachmentState.copy(deleteConfirmation = item) },
+                                        onConfirmDelete = ::performAttachmentDelete,
+                                        onCancelDelete = { attachmentState = attachmentState.copy(deleteConfirmation = null) },
+                                        onDismissPreview = ::dismissAttachmentPreview,
+                                        onPdfPage = ::loadAttachmentPreview
+                                    )
                                 }
                             }
                             NavigationBar {
@@ -199,6 +242,12 @@ class MainActivity : ComponentActivity() {
                                     onClick = { destination = AppDestination.DOMAINS },
                                     icon = { Text("5") },
                                     label = { Text(stringResource(R.string.app_nav_domains)) }
+                                )
+                                NavigationBarItem(
+                                    selected = destination == AppDestination.ATTACHMENTS,
+                                    onClick = { destination = AppDestination.ATTACHMENTS },
+                                    icon = { Text("6") },
+                                    label = { Text(stringResource(R.string.app_nav_attachments)) }
                                 )
                             }
                         }
@@ -331,6 +380,175 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun refreshAttachmentScreen() {
+        val app = application as TimelineApplication
+        attachmentState = attachmentState.copy(loading = true, message = null)
+        lifecycleScope.launch {
+            val result = captureAttachmentResult { withContext(Dispatchers.IO) { app.listDocumentAttachments() } }
+            attachmentState = result.fold(
+                onSuccess = { rows ->
+                    attachmentState.copy(
+                        loading = false,
+                        busy = false,
+                        items = rows.map { row ->
+                            AttachmentUiItem(
+                                id = row.id,
+                                mimeType = row.mimeType,
+                                sizeBytes = row.sizeBytes,
+                                importedAtEpochMillis = row.importedAtEpochMillis
+                            )
+                        },
+                        message = null
+                    )
+                },
+                onFailure = {
+                    attachmentState.copy(loading = false, busy = false, message = AttachmentUiMessage.STORAGE_NOT_READY)
+                }
+            )
+        }
+    }
+
+    private fun performAttachmentImport(uri: Uri) {
+        val app = application as TimelineApplication
+        val recovery = app.attachmentRecoveryState.value
+        if (recovery !is AttachmentRecoveryState.Ready) {
+            attachmentState = attachmentState.copy(message = AttachmentUiMessage.STORAGE_NOT_READY)
+            return
+        }
+        attachmentState = attachmentState.copy(busy = true, message = null)
+        lifecycleScope.launch {
+            val result = captureAttachmentResult {
+                withContext(Dispatchers.IO) {
+                    val mimeType = contentResolver.getType(uri)
+                        ?: throw IllegalArgumentException("Document provider did not report a MIME type")
+                    val input = contentResolver.openInputStream(uri)
+                        ?: throw IllegalArgumentException("Document provider could not open the selected document")
+                    input.use { app.importDocumentAttachment(it, mimeType) }
+                }
+            }
+            val refreshed = captureAttachmentResult { withContext(Dispatchers.IO) { app.listDocumentAttachments() } }
+            val message = when {
+                result.isSuccess -> AttachmentUiMessage.IMPORTED
+                result.exceptionOrNull() is AttachmentTooLargeException -> AttachmentUiMessage.IMPORT_TOO_LARGE
+                result.exceptionOrNull() is IllegalArgumentException -> AttachmentUiMessage.IMPORT_UNSUPPORTED
+                else -> AttachmentUiMessage.IMPORT_FAILED
+            }
+            attachmentState = attachmentState.copy(
+                loading = false,
+                busy = false,
+                items = refreshed.getOrNull()?.map { row ->
+                    AttachmentUiItem(row.id, row.mimeType, row.sizeBytes, row.importedAtEpochMillis)
+                } ?: attachmentState.items,
+                message = message
+            )
+        }
+    }
+
+    private fun performAttachmentDelete(item: AttachmentUiItem) {
+        val app = application as TimelineApplication
+        if (app.attachmentRecoveryState.value !is AttachmentRecoveryState.Ready) {
+            attachmentState = attachmentState.copy(
+                deleteConfirmation = null,
+                message = AttachmentUiMessage.STORAGE_NOT_READY
+            )
+            return
+        }
+        attachmentState = attachmentState.copy(busy = true, deleteConfirmation = null, message = null)
+        lifecycleScope.launch {
+            val result = captureAttachmentResult { withContext(Dispatchers.IO) { app.deleteDocumentAttachment(item.id) } }
+            val refreshed = captureAttachmentResult { withContext(Dispatchers.IO) { app.listDocumentAttachments() } }
+            val message = when (val deletion = result.getOrNull()) {
+                AttachmentDeleteResult.NotFound -> AttachmentUiMessage.DELETE_NOT_FOUND
+                is AttachmentDeleteResult.Deleted -> {
+                    if (deletion.encryptedFileRemoved) AttachmentUiMessage.DELETED
+                    else AttachmentUiMessage.DELETE_CLEANUP_PENDING
+                }
+                null -> AttachmentUiMessage.DELETE_FAILED
+            }
+            if (attachmentState.preview?.item?.id == item.id) dismissAttachmentPreview()
+            attachmentState = attachmentState.copy(
+                loading = false,
+                busy = false,
+                items = refreshed.getOrNull()?.map { row ->
+                    AttachmentUiItem(row.id, row.mimeType, row.sizeBytes, row.importedAtEpochMillis)
+                } ?: attachmentState.items,
+                message = if (refreshed.isFailure && result.isSuccess) AttachmentUiMessage.DELETE_FAILED else message
+            )
+        }
+    }
+
+    private fun loadAttachmentPreview(item: AttachmentUiItem, pageIndex: Int) {
+        val app = application as TimelineApplication
+        if (app.attachmentRecoveryState.value !is AttachmentRecoveryState.Ready) {
+            attachmentState = attachmentState.copy(message = AttachmentUiMessage.STORAGE_NOT_READY)
+            return
+        }
+        previewRequestGeneration += 1L
+        val request = previewRequestGeneration
+        releaseAttachmentPreviewBitmap()
+        attachmentState = attachmentState.copy(
+            preview = AttachmentPreviewUiState.Loading(item),
+            deleteConfirmation = null,
+            message = null
+        )
+        lifecycleScope.launch {
+            val result = captureAttachmentResult {
+                withContext(Dispatchers.IO) {
+                    if (item.mimeType == AttachmentImportPolicy.PDF_MIME_TYPE) {
+                        app.ensureAttachmentPreviewCacheReady()
+                    }
+                    app.withDocumentAttachmentContent(item.id) { input ->
+                        when (item.mimeType) {
+                            AttachmentImportPolicy.TEXT_MIME_TYPE -> {
+                                val preview = AttachmentPreviewLoader.readText(input)
+                                AttachmentPreviewUiState.Text(item, preview.content, preview.truncated)
+                            }
+                            AttachmentImportPolicy.PDF_MIME_TYPE -> {
+                                val preview = AttachmentPreviewLoader.renderPdf(this@MainActivity, input, pageIndex)
+                                AttachmentPreviewUiState.Pdf(item, preview.bitmap, preview.pageIndex, preview.pageCount)
+                            }
+                            else -> throw IllegalArgumentException("Unsupported attachment type")
+                        }
+                    } ?: throw IllegalStateException("Attachment is no longer available")
+                }
+            }
+            val preview = result.getOrNull()
+            if (request != previewRequestGeneration) {
+                (preview as? AttachmentPreviewUiState.Pdf)?.bitmap?.recycle()
+                return@launch
+            }
+            attachmentState = attachmentState.copy(
+                preview = preview ?: AttachmentPreviewUiState.Failed(item),
+                message = if (result.isFailure) AttachmentUiMessage.PREVIEW_FAILED else null
+            )
+        }
+    }
+
+    private fun dismissAttachmentPreview() {
+        previewRequestGeneration += 1L
+        releaseAttachmentPreviewBitmap()
+        attachmentState = attachmentState.copy(preview = null)
+    }
+
+    private fun releaseAttachmentPreviewBitmap() {
+        (attachmentState.preview as? AttachmentPreviewUiState.Pdf)?.bitmap?.let { bitmap ->
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
+    }
+
+    private suspend fun <T> captureAttachmentResult(operation: suspend () -> T): Result<T> = try {
+        Result.success(operation())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Exception) {
+        Result.failure(failure)
+    }
+
+    override fun onDestroy() {
+        dismissAttachmentPreview()
+        super.onDestroy()
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(STATE_PENDING_MODEL_IMPORT_ID, pendingModelImportId)
         super.onSaveInstanceState(outState)
@@ -340,5 +558,9 @@ class MainActivity : ComponentActivity() {
         const val STATE_PENDING_MODEL_IMPORT_ID = "pending_model_import_id"
         val ZIP_MIME_TYPES = arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")
         val ALL_DOCUMENT_TYPES = arrayOf("*/*")
+        val ATTACHMENT_MIME_TYPES = arrayOf(
+            AttachmentImportPolicy.PDF_MIME_TYPE,
+            AttachmentImportPolicy.TEXT_MIME_TYPE
+        )
     }
 }

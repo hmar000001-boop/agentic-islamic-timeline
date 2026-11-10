@@ -29,3 +29,7 @@ A debug APK produced by CI is a **validation artifact**, not a production releas
 - The only evidence is a source-text grep, a mock, a JVM test or a locally generated debug APK where an Android/device test is required.
 
 Release status is **NO-GO** until each applicable gate has a named owner, accepted evidence and an explicit sign-off.
+
+## Acceptance update — 2026-11-10
+
+Parts 0–2 hosted CI: **user-confirmed green** after correction of the API 36 canonical Android private-directory check. Part 3 attachment workflow has source/static checks wired into CI but its hosted run is still pending. This does not change the release no-go criteria: backup/restore, physical-device encryption/Keystore behavior, offline runtime network denial, signed corpus rights, scholarly review, model runtime/performance, authorization negative-side-effect tests, accessibility/RTL and production signing still need explicit evidence and sign-off. The status table above records the initial Part 0 baseline; this dated note records the later acceptance update.

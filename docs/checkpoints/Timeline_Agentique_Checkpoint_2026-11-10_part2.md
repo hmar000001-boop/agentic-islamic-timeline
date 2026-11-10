@@ -38,4 +38,10 @@ The store plus test sources compile against API-shaped stubs, 12 JVM harness tes
 - Exercise app process kill/restart, Activity recreation during recovery, app startup with orphan ciphertext, startup with a missing referenced ciphertext, transient scan failure followed by retry, and cancellation during process shutdown.
 - Verify that a failed recovery never exposes attachment APIs and that missing metadata rows remain preserved.
 
-**Status:** source implementation completed; actual Gradle, Android instrumentation and physical-device acceptance are still pending. Part 3 has not started.
+**Status:** Part 2 implementation completed; the user confirms hosted CI is green after the canonical-path correction. Wider physical-device and production-release gates remain open. Part 3 begins in the next increment.
+
+## Hosted CI acceptance follow-up — 2026-11-10
+
+The user subsequently confirmed that the hosted CI rerun is green after the canonical Android private-directory correction. This closes the previously failing API 36 connected test gate for the two `EncryptedAttachmentKeystoreTest` cases in `:core:security` and four `RoomDocumentAttachmentRepositoryTest` cases in `:core:persistence`, together with the rest of the Parts 0–2 workflow as run by the user. The successful GitHub Actions detail log was not included in this workspace, so this status is recorded as **user-confirmed**, not independently audited here. The historical failure and correction above are retained for traceability.
+
+Parts 0–2 are therefore complete as implementation increments and their hosted CI acceptance is user-confirmed. This is not a production release sign-off: physical-device security/backup tests, offline runtime network denial, signed source-rights evidence, scholarly review, model/device performance, accessibility/RTL review and production signing remain independent release gates.

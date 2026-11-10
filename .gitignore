@@ -1,23 +1,22 @@
-.gradle/
+# Maven
+**/target/
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE / OS
 .idea/
-local.properties
-**/build/
-**/.DS_Store
+.vscode/
 *.iml
-*.hprof
-*.jks
-*.keystore
-*.pem
-*.p12
-*.pfx
-*.aar
-*.apk
-*.aab
-.cxx/
-.externalNativeBuild/
+.DS_Store
+Thumbs.db
 
+# Local secrets and runtime artifacts
+.env
+.env.*
+!.env.example
+*.cassette.local
+*.cassette
+
+# Local verification output
 __pycache__/
-*.pyc
-
-# Kotlin compiler and Gradle persistent state
-.kotlin/
+*.py[cod]
+/artifacts/

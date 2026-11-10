@@ -28,7 +28,7 @@ class RoomAuditLogTest {
 
     @After fun tearDown() { db.close() }
 
-    @Test fun appendsAndVerifiesHmacChainWithoutPersistingPayload(): Unit = runBlocking {
+    @Test fun appendsAndVerifiesHmacChainWithoutPersistingPayload() = runBlocking {
         val payload = "private-details-must-not-be-stored".toByteArray()
         assertEquals(1L, audit.append("ACTION_APPROVED", payload, Instant.parse("2026-11-07T18:00:00Z")))
         assertEquals(2L, audit.append("ACTION_EXECUTION", "receipt-hash-only".toByteArray(), Instant.parse("2026-11-07T18:00:01Z")))
@@ -38,14 +38,14 @@ class RoomAuditLogTest {
         assertFalse(rows.first().recordMac == rows.first().payloadHash)
     }
 
-    @Test fun tamperedRecordMacIsDetected(): Unit = runBlocking {
+    @Test fun tamperedRecordMacIsDetected() = runBlocking {
         audit.append("TASK_CREATED", "id-1".toByteArray(), Instant.parse("2026-11-07T18:00:00Z"))
         db.openHelper.writableDatabase.execSQL("UPDATE audit_event SET recordMac = '00' WHERE sequence = 1")
         val result = audit.verify()
         assertTrue(result is app.timeline.islamic.core.agent.AuditVerification.Invalid)
     }
 
-    @Test fun missingHistoricalKeystoreKeyFailsClosedAndDoesNotResetChain(): Unit = runBlocking {
+    @Test fun missingHistoricalKeystoreKeyFailsClosedAndDoesNotResetChain() = runBlocking {
         val alias = "timeline.test.audit.missing.${System.nanoTime()}"
         val provider = KeystoreAuditMacProvider(context, alias)
         val localAudit = RoomAuditLog(db, provider)

@@ -23,7 +23,7 @@ import org.junit.runner.RunWith
 class RoomDomainWorkspaceTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
-    @Test fun encryptedRoomWorkspaceSupportsHashVerifiedCasAndRejectsTampering(): Unit = runBlocking {
+    @Test fun encryptedRoomWorkspaceSupportsHashVerifiedCasAndRejectsTampering() = runBlocking {
         System.loadLibrary("sqlcipher")
         val name = "phase6-domain-workspace-${System.nanoTime()}.db"
         val passphrase = ByteArray(32).also(SecureRandom()::nextBytes)

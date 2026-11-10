@@ -36,12 +36,6 @@ import app.timeline.islamic.core.persistence.RoomCorpusPackRegistry
 import app.timeline.islamic.core.persistence.RoomPublisherKeyringStore
 import app.timeline.islamic.core.persistence.RoomDenseEmbeddingIndexStore
 import app.timeline.islamic.core.persistence.RoomDomainWorkspaceRepository
-import app.timeline.islamic.core.persistence.RoomDocumentAttachmentRepository
-import app.timeline.islamic.core.persistence.AttachmentRecoveryCoordinator
-import app.timeline.islamic.core.persistence.AttachmentRecoveryState
-import app.timeline.islamic.core.persistence.AttachmentDeleteResult
-import app.timeline.islamic.core.persistence.DocumentAttachmentEntity
-import app.timeline.islamic.core.security.EncryptedAttachmentStore
 import app.timeline.islamic.core.retrieval.BundledSqliteCorpusIndex
 import app.timeline.islamic.core.retrieval.LocalEmbeddingIndexBuilder
 import app.timeline.islamic.core.retrieval.LocalCorpusRetriever
@@ -65,115 +59,25 @@ import app.timeline.islamic.core.knowledge.InstalledCorpusPackRecord
 import app.timeline.islamic.core.knowledge.LocalTextEmbeddingModel
 import app.timeline.islamic.core.knowledge.RetrievalRequest
 import java.io.File
-import java.io.InputStream
 import app.timeline.islamic.feature.corpus.CorpusManagementUiState
 import app.timeline.islamic.feature.corpus.CorpusPackUiItem
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class TimelineApplication : Application() {
-    // Process-owned recovery survives Activity recreation and always runs on an I/O dispatcher.
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val attachmentPreviewCacheCleanup = CompletableDeferred<Unit>()
     @Volatile var agentRuntimeReady: Boolean = false
         private set
     @Volatile var agentRuntimeFailureCode: String? = null
         private set
 
-    // Serialize agent audit/task recovery across all callers within this application process.
+    // Activity recreation must not run recovery a second time while a live process is working.
     private val agentInitializationMutex = Mutex()
     @Volatile private var completedRecoveryReport: AgentRecoveryReport? = null
 
     // Lazy access keeps UI startup independent from a model; storage errors remain explicit.
     val database by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { EncryptedDatabaseFactory.get(this) }
     val domainWorkspaceRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { RoomDomainWorkspaceRepository(database) }
-    /** Attachments are independently AES-GCM encrypted under Android Keystore, outside Room. */
-    private val documentAttachmentRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        RoomDocumentAttachmentRepository(database, EncryptedAttachmentStore(this))
-    }
-    private val attachmentRecoveryCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        AttachmentRecoveryCoordinator { documentAttachmentRepository.reconcile() }
-    }
-    val attachmentRecoveryState: StateFlow<AttachmentRecoveryState>
-        get() = attachmentRecoveryCoordinator.state
-
-    override fun onCreate() {
-        super.onCreate()
-        // Recovery is intentionally asynchronous: the Timeline remains available while the
-        // attachment-only store is checked, but attachment operations remain gated until READY.
-        applicationScope.launch {
-            // A process killed during PDF preview may leave only a private-cache plaintext
-            // temporary file. Do not permit another PDF preview until cleanup has completed.
-            try {
-                AttachmentPreviewLoader.cleanupOrphanedPreviews(cacheDir)
-                attachmentPreviewCacheCleanup.complete(Unit)
-            } catch (failure: Exception) {
-                attachmentPreviewCacheCleanup.completeExceptionally(failure)
-            }
-        }
-        applicationScope.launch { attachmentRecoveryCoordinator.initialize() }
-        applicationScope.launch {
-            try {
-                initializeAgentRuntime()
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                // initializeAgentRuntime records a non-sensitive failure code and keeps actions gated.
-            }
-        }
-    }
-
-    suspend fun retryDocumentAttachmentRecovery(): AttachmentRecoveryState =
-        attachmentRecoveryCoordinator.retry()
-
-    suspend fun ensureAttachmentPreviewCacheReady() {
-        attachmentPreviewCacheCleanup.await()
-    }
-
-    private fun requireDocumentAttachmentStorageReady() {
-        check(attachmentRecoveryCoordinator.state.value is AttachmentRecoveryState.Ready) {
-            "Encrypted attachment recovery has not completed successfully"
-        }
-    }
-
-    suspend fun importDocumentAttachment(
-        content: InputStream,
-        mimeType: String,
-        retentionPolicy: String = AttachmentImportPolicy.RETENTION_POLICY_USER_MANAGED
-    ): DocumentAttachmentEntity {
-        requireDocumentAttachmentStorageReady()
-        require(retentionPolicy == AttachmentImportPolicy.RETENTION_POLICY_USER_MANAGED) {
-            "Unsupported attachment retention policy"
-        }
-        val validated = AttachmentImportPolicy.validate(content, mimeType)
-        return documentAttachmentRepository.import(
-            validated.stream,
-            validated.mimeType,
-            retentionPolicy
-        )
-    }
-
-    suspend fun listDocumentAttachments(): List<DocumentAttachmentEntity> {
-        requireDocumentAttachmentStorageReady()
-        return documentAttachmentRepository.list()
-    }
-
-    suspend fun <T> withDocumentAttachmentContent(id: String, consumer: (InputStream) -> T): T? {
-        requireDocumentAttachmentStorageReady()
-        return documentAttachmentRepository.withContent(id, consumer)
-    }
-
-    suspend fun deleteDocumentAttachment(id: String): AttachmentDeleteResult {
-        requireDocumentAttachmentStorageReady()
-        return documentAttachmentRepository.delete(id)
-    }
     private val taskStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { RoomAgentTaskStore(database) }
     private val authorizationStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { RoomAuthorizationStore(database, KeystoreAuditMacProvider(this)) }
     private val authorizationEngine by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { AuthorizationEngine(authorizationStore) }

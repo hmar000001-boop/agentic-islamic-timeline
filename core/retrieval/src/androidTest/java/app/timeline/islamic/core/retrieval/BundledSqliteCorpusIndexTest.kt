@@ -22,7 +22,7 @@ import org.junit.runner.RunWith
 class BundledSqliteCorpusIndexTest {
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
-    @Test fun validatesPackAndReturnsOriginalArabicEvidenceThroughFts5(): Unit = runBlocking {
+    @Test fun validatesPackAndReturnsOriginalArabicEvidenceThroughFts5() = runBlocking {
         val file = newIndexFile("valid")
         try {
             buildIndex(file)
@@ -74,7 +74,7 @@ class BundledSqliteCorpusIndexTest {
         }
     }
 
-    @Test fun searchExcludesFutureDatedReviewBeforeApplyingCandidateLimit(): Unit = runBlocking {
+    @Test fun searchExcludesFutureDatedReviewBeforeApplyingCandidateLimit() = runBlocking {
         val file = newIndexFile("future-review")
         try {
             buildIndex(file, reviewedAtEpochMillis = 250L)
@@ -93,7 +93,7 @@ class BundledSqliteCorpusIndexTest {
         }
     }
 
-    @Test fun denseEvidenceLookupReturnsOnlyMatchingEligibleOriginalPassages(): Unit = runBlocking {
+    @Test fun denseEvidenceLookupReturnsOnlyMatchingEligibleOriginalPassages() = runBlocking {
         val file = newIndexFile("dense-evidence-lookup")
         try {
             buildIndex(file)
@@ -129,7 +129,7 @@ class BundledSqliteCorpusIndexTest {
         }
     }
 
-    @Test fun embeddingBatchReadsOnlyEligiblePassagesWithinTheModelInputLimit(): Unit = runBlocking {
+    @Test fun embeddingBatchReadsOnlyEligiblePassagesWithinTheModelInputLimit() = runBlocking {
         val validFile = newIndexFile("embedding-batch-valid")
         val restrictedFile = newIndexFile("embedding-batch-restricted")
         val pendingFile = newIndexFile("embedding-batch-pending")
@@ -153,7 +153,7 @@ class BundledSqliteCorpusIndexTest {
         }
     }
 
-    @Test fun embeddingBatchRejectsPassagesWhoseIdentityOrContentChangedAfterPackValidation(): Unit = runBlocking {
+    @Test fun embeddingBatchRejectsPassagesWhoseIdentityOrContentChangedAfterPackValidation() = runBlocking {
         val changedHashFile = newIndexFile("embedding-changed-hash")
         val changedKeyFile = newIndexFile("embedding-changed-key")
         val changedNormalizedFile = newIndexFile("embedding-changed-normalized")

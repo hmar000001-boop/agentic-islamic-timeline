@@ -19,7 +19,7 @@ class LocalEmbeddingIndexBuilderTest {
     private val pack = InstalledCorpusPackRecord("fixture-pack", "1.0.0", "a".repeat(64), 1L, "fixture")
     private val descriptor = LocalEmbeddingModelDescriptor("test-model", "1.0", "b".repeat(64), 16)
 
-    @Test fun completedBuildActivatesOnlyAfterAllBatchesAreWritten(): Unit = runBlocking {
+    @Test fun completedBuildActivatesOnlyAfterAllBatchesAreWritten() = runBlocking {
         val fixtureStore = FixtureStore()
         val file = createFixtureIndexFile()
         try {
@@ -36,7 +36,7 @@ class LocalEmbeddingIndexBuilderTest {
         } finally { file.delete() }
     }
 
-    @Test fun modelFailureAbortsStagingAndNeverActivates(): Unit = runBlocking {
+    @Test fun modelFailureAbortsStagingAndNeverActivates() = runBlocking {
         val fixtureStore = FixtureStore()
         val file = createFixtureIndexFile()
         try {
@@ -54,7 +54,7 @@ class LocalEmbeddingIndexBuilderTest {
         } finally { file.delete() }
     }
 
-    @Test fun emptyIndexFileIsRejectedBeforeCreatingAStagingGeneration(): Unit = runBlocking {
+    @Test fun emptyIndexFileIsRejectedBeforeCreatingAStagingGeneration() = runBlocking {
         val fixtureStore = FixtureStore()
         val emptyFile = File.createTempFile("empty-corpus-test", ".sqlite")
         try {
@@ -77,7 +77,7 @@ class LocalEmbeddingIndexBuilderTest {
         assertTrue(failure.isFailure)
     }
 
-    @Test fun oversizedPassageBatchIsRejectedAndAborted(): Unit = runBlocking {
+    @Test fun oversizedPassageBatchIsRejectedAndAborted() = runBlocking {
         val fixtureStore = FixtureStore()
         val file = createFixtureIndexFile()
         try {

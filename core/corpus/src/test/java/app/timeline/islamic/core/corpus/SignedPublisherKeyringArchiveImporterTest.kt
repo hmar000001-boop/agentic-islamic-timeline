@@ -12,7 +12,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class SignedPublisherKeyringArchiveImporterTest {
-    @Test fun importsExactRootSignedTwoEntryArchive(): Unit = runBlocking {
+    @Test fun importsExactRootSignedTwoEntryArchive() = runBlocking {
         val root = PinnedPublisherRoot("root", ByteArray(32) { 7 })
         val verifier = Verifier()
         val store = MemoryStore()
@@ -26,14 +26,14 @@ class SignedPublisherKeyringArchiveImporterTest {
         assertNotNull(manager.find("publisher"))
     }
 
-    @Test fun rejectsUnexpectedArchivePaths(): Unit = runBlocking {
+    @Test fun rejectsUnexpectedArchivePaths() = runBlocking {
         val importer = SignedPublisherKeyringArchiveImporter(manager())
         val entries = listOf("keyring.txt" to byteArrayOf(1), "keyring.sig" to ByteArray(64), "../escape" to byteArrayOf(1))
         try { importer.import(ByteArrayInputStream(zip(entries))); fail("Unexpected archive paths must fail") }
         catch (_: IllegalArgumentException) { }
     }
 
-    @Test fun rejectsArchiveAndExpandedEntryOverLimits(): Unit = runBlocking {
+    @Test fun rejectsArchiveAndExpandedEntryOverLimits() = runBlocking {
         val manager = manager()
         val importer = SignedPublisherKeyringArchiveImporter(manager)
         val oversized = "x".repeat(300 * 1024).toByteArray()

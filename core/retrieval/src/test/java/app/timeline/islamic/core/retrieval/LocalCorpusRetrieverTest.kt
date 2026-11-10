@@ -25,7 +25,7 @@ class LocalCorpusRetrieverTest {
         installedAtEpochMillis = 1_000L, licenseProfile = "fixture-cleared"
     )
 
-    @Test fun rechecksStableEvidenceIdentityBeforeReturningSearchHit(): Unit = runBlocking {
+    @Test fun rechecksStableEvidenceIdentityBeforeReturningSearchHit() = runBlocking {
         val root = createPackRoot()
         try {
             val tampered = evidence().copy(stableEvidenceKey = "f".repeat(64))
@@ -38,7 +38,7 @@ class LocalCorpusRetrieverTest {
         }
     }
 
-    @Test fun rejectsNormalizedTextThatWasChangedAfterPackValidation(): Unit = runBlocking {
+    @Test fun rejectsNormalizedTextThatWasChangedAfterPackValidation() = runBlocking {
         val root = createPackRoot()
         try {
             val tampered = evidence().copy(normalizedText = "unrelated injected terms")
@@ -51,7 +51,7 @@ class LocalCorpusRetrieverTest {
         }
     }
 
-    @Test fun reportsDenseProviderFailureWhileReturningEligibleLexicalResults(): Unit = runBlocking {
+    @Test fun reportsDenseProviderFailureWhileReturningEligibleLexicalResults() = runBlocking {
         val root = createPackRoot()
         try {
             val valid = evidence()
@@ -72,7 +72,7 @@ class LocalCorpusRetrieverTest {
         }
     }
 
-    @Test fun rejectsDenseHitWithOutOfBoundsWeightWithoutBreakingLexicalFallback(): Unit = runBlocking {
+    @Test fun rejectsDenseHitWithOutOfBoundsWeightWithoutBreakingLexicalFallback() = runBlocking {
         val root = createPackRoot()
         try {
             val valid = evidence()
@@ -93,7 +93,7 @@ class LocalCorpusRetrieverTest {
         }
     }
 
-    @Test fun rejectsConflictingDuplicateDenseWeightsButKeepsLexicalFallback(): Unit = runBlocking {
+    @Test fun rejectsConflictingDuplicateDenseWeightsButKeepsLexicalFallback() = runBlocking {
         val root = createPackRoot()
         try {
             val valid = evidence()

@@ -32,7 +32,7 @@ class StoredDenseIndexRetrieverTest {
     private val descriptor = LocalEmbeddingModelDescriptor("embedding-model", "2.0", "b".repeat(64), 16)
     private val filter = RetrievalFilter(setOf(CorpusLanguage.ARABIC), null, now)
 
-    @Test fun exhaustivePagedCosineScanReturnsStableTopKWithoutLoadingWholeIndex(): Unit = runBlocking {
+    @Test fun exhaustivePagedCosineScanReturnsStableTopKWithoutLoadingWholeIndex() = runBlocking {
         val root = Files.createTempDirectory("dense-retrieval-test-").toFile()
         val file = File(root, pack.relativeIndexPath).apply { parentFile?.mkdirs(); writeBytes(byteArrayOf(1)) }
         try {
@@ -62,7 +62,7 @@ class StoredDenseIndexRetrieverTest {
         }
     }
 
-    @Test fun staleCorpusManifestOrEmbeddingProfileCannotActivateADenseGeneration(): Unit = runBlocking {
+    @Test fun staleCorpusManifestOrEmbeddingProfileCannotActivateADenseGeneration() = runBlocking {
         val root = Files.createTempDirectory("dense-fingerprint-test-").toFile()
         val file = File(root, pack.relativeIndexPath).apply { parentFile?.mkdirs(); writeBytes(byteArrayOf(1)) }
         try {
@@ -82,7 +82,7 @@ class StoredDenseIndexRetrieverTest {
         }
     }
 
-    @Test fun fullPassageTextIsHydratedOnlyForTheFinalTopKAfterTheCompleteScan(): Unit = runBlocking {
+    @Test fun fullPassageTextIsHydratedOnlyForTheFinalTopKAfterTheCompleteScan() = runBlocking {
         val root = Files.createTempDirectory("dense-top-k-hydration-test-").toFile()
         val file = File(root, pack.relativeIndexPath).apply { parentFile?.mkdirs(); writeBytes(byteArrayOf(1)) }
         try {
@@ -118,7 +118,7 @@ class StoredDenseIndexRetrieverTest {
         }
     }
 
-    @Test fun storedDenseRetrieverIsFusedWithFtsLexicalEvidenceByTheApplicationOrchestrator(): Unit = runBlocking {
+    @Test fun storedDenseRetrieverIsFusedWithFtsLexicalEvidenceByTheApplicationOrchestrator() = runBlocking {
         val root = Files.createTempDirectory("dense-hybrid-fusion-test-").toFile()
         File(root, pack.relativeIndexPath).apply { parentFile?.mkdirs(); writeBytes(byteArrayOf(1)) }
         try {
@@ -176,7 +176,7 @@ class StoredDenseIndexRetrieverTest {
         assertFalse(descriptor.embeddingProfileSha256 == otherProfile.embeddingProfileSha256)
     }
 
-    @Test fun detectsMissingRowsInsteadOfReturningAFalseCompleteRanking(): Unit = runBlocking {
+    @Test fun detectsMissingRowsInsteadOfReturningAFalseCompleteRanking() = runBlocking {
         val root = Files.createTempDirectory("dense-count-test-").toFile()
         val file = File(root, pack.relativeIndexPath).apply { parentFile?.mkdirs(); writeBytes(byteArrayOf(1)) }
         try {
@@ -194,7 +194,7 @@ class StoredDenseIndexRetrieverTest {
         }
     }
 
-    @Test fun queryFilterIsAppliedBeforeDenseCandidatesAreRanked(): Unit = runBlocking {
+    @Test fun queryFilterIsAppliedBeforeDenseCandidatesAreRanked() = runBlocking {
         val root = Files.createTempDirectory("dense-filter-test-").toFile()
         val file = File(root, pack.relativeIndexPath).apply { parentFile?.mkdirs(); writeBytes(byteArrayOf(1)) }
         try {

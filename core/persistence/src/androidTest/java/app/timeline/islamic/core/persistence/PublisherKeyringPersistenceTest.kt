@@ -25,7 +25,7 @@ class PublisherKeyringPersistenceTest {
 
     @After fun tearDown() { database.close() }
 
-    @Test fun publisherKeyringUpdatesUseCompareAndSetAndRetainExactSignedBytes(): Unit = runBlocking {
+    @Test fun publisherKeyringUpdatesUseCompareAndSetAndRetainExactSignedBytes() = runBlocking {
         val store = RoomPublisherKeyringStore(database)
         val first = PublisherKeyringEnvelope(1, "canonical-v1".toByteArray(), ByteArray(64) { 1 }, 1_000)
         assertTrue(store.writeIfCurrentVersion(0, first))
@@ -39,7 +39,7 @@ class PublisherKeyringPersistenceTest {
         assertEquals(2L, store.read()!!.version)
     }
 
-    @Test fun registryUpgradeQuarantineAndRemovalAreGuardedStateTransitions(): Unit = runBlocking {
+    @Test fun registryUpgradeQuarantineAndRemovalAreGuardedStateTransitions() = runBlocking {
         val registry = RoomCorpusPackRegistry(database)
         val first = InstalledCorpusPackRecord("test-pack", "1.0.0", "a".repeat(64), 1_000, "cleared")
         assertTrue(registry.registerAndCheck(first))

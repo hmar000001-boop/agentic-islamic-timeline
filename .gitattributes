@@ -1,0 +1,14 @@
+* text=auto
+
+# POSIX entry points and shell-based bootstrap tests.
+*.sh text eol=lf
+mvnw text eol=lf
+
+# Windows command entry point.
+*.cmd text eol=crlf
+
+# Workflow and project configuration.
+*.yml text eol=lf
+*.yaml text eol=lf
+*.xml text eol=lf
+*.properties text eol=lf

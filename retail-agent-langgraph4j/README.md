@@ -2,6 +2,12 @@
 
 This module is the primary orchestration path. LangGraph4j owns graph state, control flow, checkpointing, interruption and resumption. LangChain4j supplies the production chat-model client. Spring AI remains only as the current embedding/vector-store adapter and deterministic test compatibility layer; it is not the real chat provider in this module.
 
+## Dependency baseline and checkpoint compatibility
+
+This module is aligned to LangGraph4j 1.9.9 and LangChain4j 1.23.0 through the root BOMs. It already uses the preferred `GraphInput.args()` / `GraphInput.resume()` execution API. `RetailAgentGraph` explicitly retains `releaseThread(false)` because the application expects to keep its logical thread available after a normal completed run.
+
+WP-1 intentionally keeps `PostgresSaver` (V1) and the existing V1 schema. LangGraph4j 1.9.9 also provides `PostgresSaverV2`, but V2 is not schema-compatible with V1. Switching the saver class or applying the V2 migration is deferred to a dedicated checkpoint-migration work package with a backup/rollback plan and PostgreSQL interrupt/resume tests. Do not point the V1 saver at V2 tables or vice versa.
+
 ## Run and test
 
 From the workspace root:
@@ -57,7 +63,7 @@ This is an application-level control boundary, not an authentication system: a r
 
 ## Current limitations
 
-- PostgreSQL checkpoint wiring is present, but the integration environment in this delivery could not execute Maven or connect to a real database. CI includes a PostgreSQL-backed verification job; its result must be observed on GitHub before the database path is considered verified. The current 1.8 V1 saver still needs an explicit cross-restart approval-resume test; do not infer that behavior from checkpoint persistence alone.
+- PostgreSQL checkpoint wiring is present, but the integration environment in this delivery could not execute Maven or connect to a real database. CI includes a PostgreSQL-backed verification job; its result must be observed on GitHub before the database path is considered verified. The retained V1 saver still needs an explicit cross-restart approval-resume test; do not infer that behavior from checkpoint persistence alone.
 - Long-term episodic policy and workspace-admission scores remain in-process maps. Durable CoALA memory and outcome attribution are later phases.
 - Spring AI `SimpleVectorStore` and hash embeddings remain the retrieval adapter; persistent hybrid RAG/reranking is later work.
 - LangChain4j structured JSON Schema output and tool-provider/MCP integration are later phases; this phase keeps model output as validated JSON DTO proposals and Java-owned action authority.

@@ -50,4 +50,4 @@ The module currently has a deterministic scripted `ChatModel`; cassette replay a
 
 ## Dependency compatibility
 
-The Agentic artifact has its own beta version line. This workspace pins `langchain4j-agentic` to `1.22.0-beta32` and the core/OpenAI integration to `1.22.0`, matching the Agentic POM's declared core dependency. These properties are intentionally separate in the root POM.
+The root LangChain4j BOM is pinned to `1.23.0`. It manages stable modules such as core and OpenAI at `1.23.0`, and manages `langchain4j-agentic` at `1.23.0-beta33`. The Agentic module remains experimental/pre-release; do not treat its beta API as a stable production contract. This module remains a comparison implementation and is not promoted to feature parity merely by updating its dependencies.

@@ -15,3 +15,8 @@ Thumbs.db
 !.env.example
 *.cassette.local
 *.cassette
+
+# Local verification output
+__pycache__/
+*.py[cod]
+/artifacts/

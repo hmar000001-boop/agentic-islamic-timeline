@@ -11,10 +11,10 @@ The purpose is to study the *same application semantics* through two orchestrati
 ## Requirements
 
 - JDK 21
-- Maven Wrapper (pins Maven 3.10.0; no system Maven installation is required)
+- Repository Maven bootstrap launcher (pins Apache Maven 3.10.0 and verifies its Apache-published SHA-512; no system Maven installation is required)
 - Network access on the first build to download Maven and resolve project dependencies
 
-The repository includes a pinned Maven Wrapper. This packaging environment cannot resolve the Apache distribution host to run Maven, so the full reactor has **not been executed locally through Phase 4**. Static validation and standalone core compilation are reported separately; run the build below on a Maven-enabled machine before treating this revision as build-verified.
+The repository includes custom POSIX (`mvnw`) and Windows (`mvnw.cmd`) bootstrap launchers. They download the pinned Apache Maven binary distribution into the Maven user cache, verify the distribution with the Apache-published SHA-512 checksum, and then invoke the build. They are **not** the Apache Maven Wrapper implementation and do not use a wrapper JAR. The current packaging environment cannot resolve `downloads.apache.org`, so a real Maven execution remains an external acceptance gate; the bootstrap logic is separately exercised with a local fixture archive.
 
 ## Build and tests
 
@@ -22,6 +22,18 @@ From this directory:
 
 ```bash
 ./mvnw -B -ntp clean verify
+```
+
+Exercise the bootstrap logic offline with a generated fixture archive:
+
+```bash
+./scripts/test-wrapper-bootstrap.sh
+```
+
+Run the full clean verification twice and compare packaged JAR/WAR hashes:
+
+```bash
+./scripts/verify-reproducible-build.sh
 ```
 
 Run one module and its shared dependency:
@@ -125,18 +137,25 @@ This is an executable mechanism-study workspace, not yet a production deployment
 - The retail catalogue is an in-memory fixture; `check_stock` reports that fixture's state, not a live retailer inventory service.
 - The primary graph includes a checkpointed approval interrupt/resume path and subject-binding check. The shared action contract requires approval for non-READ effects by default. API authentication, cross-instance locking, multi-tenant isolation, transactional external-side-effect idempotency and durable audit storage remain unimplemented.
 
-## Dependency pins
+## Dependency pins — WP-1 target (2026-11-10)
 
-Versions are pinned in the root `pom.xml` properties and module POMs:
+The current build uses centrally managed, explicitly versioned release trains:
 
-- Java 21
-- Spring Boot parent 4.1.0
-- Spring AI 2.0.1
-- LangGraph4j 1.8.25
-- LangChain4j core / OpenAI integration 1.22.0
-- LangChain4j Agentic 1.22.0-beta32 (the separately versioned experimental module)
+- Java 21 (unchanged)
+- Apache Maven distribution 3.10.0 via the repository bootstrap launcher (unchanged)
+- Spring Boot parent 4.1.2 (stable)
+- Spring AI BOM 2.0.2 (stable)
+- LangGraph4j BOM 1.9.9 (current 1.9 release)
+- LangChain4j BOM 1.23.0 (stable core/OpenAI modules)
+- LangChain4j Agentic 1.23.0-beta33 (BOM-managed beta module; experimental/pre-release)
 
-The LangChain4j `agentic` module is documented by its maintainers as **experimental** and subject to change. It is independently versioned: Maven Central currently publishes `langchain4j-agentic` as `1.22.0-beta32`, and that artifact declares a dependency on `langchain4j` core `1.22.0`. Do not reuse the core version string for the Agentic artifact. Keep it isolated from the framework-neutral core and revalidate its planner/persistence APIs when upgrading.
+The root POM imports the Spring AI, LangGraph4j and LangChain4j BOMs. Child modules do not restate versions for dependencies managed by those BOMs. The Agentic module remains isolated from the framework-neutral core and remains experimental; the LangChain4j maintainers explicitly warn that some modules in the 1.23.0 BOM still use the `1.23.0-beta33` prerelease line.
+
+WP-1 deliberately retains the existing LangGraph4j PostgreSQL V1 saver and schema, and keeps `CompileConfig.releaseThread(false)`. This avoids mixing a dependency refresh with a checkpoint-schema migration or graph lifecycle change. LangGraph4j 1.9 offers a V2 saver with a schema incompatible with V1; any V2 migration must be a separately reviewed, backed-up and integration-tested work package. The 1.9 runtime's default release behavior is explicitly overridden to preserve this project's existing same-thread lifecycle.
+
+## Remediation scope and research traceability
+
+WP-0 freezes the objective, non-goals, paper-to-code crosswalk and known comparison confounders. Read [`docs/remediation/PROJECT_SCOPE.md`](docs/remediation/PROJECT_SCOPE.md), [`docs/remediation/PAPER_TO_CODE_CROSSWALK.md`](docs/remediation/PAPER_TO_CODE_CROSSWALK.md) and [`docs/remediation/COMPARISON_CONFOUNDERS.md`](docs/remediation/COMPARISON_CONFOUNDERS.md) before changing runtime behavior.
 
 ## References
 
@@ -154,4 +173,4 @@ The repository pins the Maven distribution and verifies its SHA-512 before first
 ./mvnw -B -ntp -Dapp.llm.provider=simulated clean verify
 ```
 
-On Windows, use `mvnw.cmd` with the same arguments. The wrapper downloads the pinned Apache Maven distribution into the user's Maven wrapper cache; it does not commit Maven binaries to the repository. CI uses the same wrapper and simulated providers. The experimental `retail-agent-langchain4j` Agentic module is retained as-is and is not part of the primary-runtime redesign.
+On Windows, use `mvnw.cmd` with the same arguments. Both launchers cache the pinned Apache Maven distribution under the Maven user home, validate its SHA-512 and reported version, and do not commit Maven binaries to the repository. The launchers are custom repository bootstrap scripts, not the official Apache Maven Wrapper. CI exercises both the Linux and Windows entry points with simulated providers. The experimental `retail-agent-langchain4j` Agentic module is retained as-is and is not part of the primary-runtime redesign.

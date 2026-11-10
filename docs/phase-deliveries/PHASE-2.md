@@ -30,7 +30,7 @@ Status: **implementation and test sources delivered; Maven/JUnit/PostgreSQL exec
 - Java runtime: 21.0.12 available.
 - All `retail-agent-core` production sources compile with `javac --release 21` after the final edits.
 - All Maven POM files parse as XML.
-- The Maven Wrapper was invoked. It stopped before Maven startup because this environment cannot resolve `downloads.apache.org` (DNS/network unavailable). Consequently the Maven reactor, JUnit tests, Spring context, real LangChain4j/OpenAI path, and PostgreSQL saver were **not executed locally**.
+- The repository Maven bootstrap launcher was invoked. It stopped before Maven startup because this environment cannot resolve `downloads.apache.org` (DNS/network unavailable). Consequently the Maven reactor, JUnit tests, Spring context, real LangChain4j/OpenAI path, and PostgreSQL saver were **not executed locally**.
 - CI contains a full-reactor test job and a second job that starts PostgreSQL and runs the LangGraph4j test suite with the PostgreSQL backend. Inspect the CI run before treating those paths as verified.
 - `retail-agent-langchain4j/` was compared against the Phase 1 delivery and is unchanged byte-for-byte. It remains the experimental Agentic comparison track, as requested.
 
@@ -38,7 +38,7 @@ Status: **implementation and test sources delivered; Maven/JUnit/PostgreSQL exec
 
 - No REST API/authentication layer; `authenticatedSubjectId` must be supplied by a trusted caller derived from its verified security principal. Never trust a request-body or model-provided subject ID.
 - The in-JVM striped locks do not coordinate multiple application instances. Deploy as a single writer until Phase 8 adds database-backed concurrency/idempotency controls.
-- PostgreSQL checkpoint wiring is source-integrated but not locally integration-tested. It uses the LangGraph4j 1.8 V1 saver; its interruption metadata and cross-restart approval-resume behavior require an integration test. A V2 saver migration belongs with the planned LangGraph4j version compatibility work.
+- At the Phase 2 delivery, PostgreSQL checkpoint wiring used the LangGraph4j 1.8 V1 saver and was not locally integration-tested. WP-1 later upgrades LangGraph4j to 1.9.9 while deliberately retaining the V1 saver/schema to keep the dependency refresh separate from a schema migration. Interruption metadata and cross-restart approval-resume still require integration tests; any V2 migration remains a distinct task.
 - Durable episodic/semantic/procedural memory and intention storage are not delivered here; only graph checkpoints are configured for PostgreSQL.
 - Workspace admission scores and adaptive-memory maps remain in-process.
 - Current RAG remains Spring AI `SimpleVectorStore` with hash embeddings by default; durable hybrid retrieval and reranking remain later phases.

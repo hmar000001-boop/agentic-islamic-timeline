@@ -5,7 +5,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.1.0</version>
+    <version>4.1.2</version>
     <relativePath/>
   </parent>
   <groupId>com.example</groupId>
@@ -21,10 +21,9 @@
   <properties>
     <java.version>21</java.version>
     <maven.compiler.release>21</maven.compiler.release>
-    <spring-ai.version>2.0.1</spring-ai.version>
-    <langgraph4j.version>1.8.25</langgraph4j.version>
-    <langchain4j.version>1.22.0</langchain4j.version>
-    <langchain4j.agentic.version>1.22.0-beta32</langchain4j.agentic.version>
+    <spring-ai.version>2.0.2</spring-ai.version>
+    <langgraph4j.version>1.9.9</langgraph4j.version>
+    <langchain4j.version>1.23.0</langchain4j.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <project.build.outputTimestamp>2026-11-06T00:00:00Z</project.build.outputTimestamp>
@@ -62,7 +61,7 @@
             <configuration>
               <rules>
                 <requireJavaVersion><version>[21,22)</version></requireJavaVersion>
-                <requireMavenVersion><version>[3.10.0,)</version></requireMavenVersion>
+                <requireMavenVersion><version>[3.10.0]</version></requireMavenVersion>
               </rules>
               <fail>true</fail>
             </configuration>
@@ -77,6 +76,20 @@
         <groupId>org.springframework.ai</groupId>
         <artifactId>spring-ai-bom</artifactId>
         <version>${spring-ai.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-bom</artifactId>
+        <version>${langchain4j.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.bsc.langgraph4j</groupId>
+        <artifactId>langgraph4j-bom</artifactId>
+        <version>${langgraph4j.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>

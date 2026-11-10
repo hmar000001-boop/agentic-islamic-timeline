@@ -127,6 +127,85 @@ class EncryptedAttachmentStoreTest {
         assertFalse(File(directory, "second-file.tla").exists())
     }
 
+    @Test fun acceptsCanonicalizedParentAliasButRejectsSymlinkedStorageDirectory(): Unit {
+        val physicalParent = Files.createTempDirectory("timeline-attachment-physical")
+        val parentAlias = physicalParent.parent.resolve("${physicalParent.fileName}-alias")
+        try {
+            val aliasCreated = runCatching { Files.createSymbolicLink(parentAlias, physicalParent) }.isSuccess
+            org.junit.Assume.assumeTrue("Symbolic links are unavailable on this test host", aliasCreated)
+
+            // This is representative of Android returning an app-private directory through a
+            // platform path alias. The managed leaf is real, so canonicalization must be allowed.
+            val aliasedRoot = File(parentAlias.toFile(), "attachments").apply { check(mkdirs()) }
+            val store = EncryptedAttachmentStore(aliasedRoot, AttachmentEncryptionKeyProvider { _ -> key })
+            store.encrypt("canonical-parent", ByteArrayInputStream(byteArrayOf(4, 5, 6)))
+            assertTrue(File(physicalParent.toFile(), "attachments/canonical-parent.tla").isFile)
+
+            val symlinkTarget = Files.createTempDirectory(physicalParent, "target-")
+            val symlinkRoot = physicalParent.resolve("managed-root-link")
+            Files.createSymbolicLink(symlinkRoot, symlinkTarget)
+            val symlinkedStore = EncryptedAttachmentStore(
+                symlinkRoot.toFile(),
+                AttachmentEncryptionKeyProvider { _ -> key }
+            )
+            val failure = runCatching {
+                symlinkedStore.encrypt("must-not-write", ByteArrayInputStream(byteArrayOf(7, 8, 9)))
+            }.exceptionOrNull()
+            assertTrue("A symlinked managed directory must be rejected", failure is IllegalStateException)
+            assertFalse(Files.exists(symlinkTarget.resolve("must-not-write.tla")))
+        } finally {
+            runCatching { Files.deleteIfExists(parentAlias) }
+            physicalParent.toFile().deleteRecursively()
+        }
+    }
+
+    @Test fun rejectsSymlinkedChildBelowTrustedPrivateParentBeforeCreatingFiles(): Unit {
+        val trustedParent = Files.createTempDirectory("timeline-attachment-private-root")
+        val redirectedTarget = Files.createTempDirectory("timeline-attachment-redirect")
+        val redirectedChild = trustedParent.resolve("attachments")
+        try {
+            val linkCreated = runCatching { Files.createSymbolicLink(redirectedChild, redirectedTarget) }.isSuccess
+            org.junit.Assume.assumeTrue("Symbolic links are unavailable on this test host", linkCreated)
+            val store = EncryptedAttachmentStore(
+                File(redirectedChild.toFile(), "v1"),
+                AttachmentEncryptionKeyProvider { _ -> key },
+                rootDirectoryBoundary = trustedParent.toFile()
+            )
+            val failure = runCatching {
+                store.encrypt("must-not-follow-child-link", ByteArrayInputStream(byteArrayOf(2, 4, 6)))
+            }.exceptionOrNull()
+            assertTrue("A symlink below the trusted private parent must be rejected", failure is IllegalStateException)
+            assertFalse("Validation must happen before mkdirs follows the symlink", Files.exists(redirectedTarget.resolve("v1")))
+        } finally {
+            runCatching { Files.deleteIfExists(redirectedChild) }
+            trustedParent.toFile().deleteRecursively()
+            redirectedTarget.toFile().deleteRecursively()
+        }
+    }
+
+    @Test fun rejectsSymlinkedPlaintextVerificationCache(): Unit = withTempDirectory { root ->
+        val physicalCache = Files.createTempDirectory("timeline-attachment-cache-target")
+        val cacheAlias = physicalCache.parent.resolve("${physicalCache.fileName}-alias")
+        try {
+            val aliasCreated = runCatching { Files.createSymbolicLink(cacheAlias, physicalCache) }.isSuccess
+            org.junit.Assume.assumeTrue("Symbolic links are unavailable on this test host", aliasCreated)
+            val store = EncryptedAttachmentStore(
+                root,
+                AttachmentEncryptionKeyProvider { _ -> key },
+                plaintextTemporaryDirectory = cacheAlias.toFile()
+            )
+            val metadata = store.encrypt("cache-symlink", ByteArrayInputStream(byteArrayOf(1, 2, 3)))
+            val failure = runCatching {
+                store.withDecryptedAttachment("cache-symlink", metadata.sizeBytes, metadata.sha256) { it.readBytes() }
+            }.exceptionOrNull()
+            assertTrue("A symlinked plaintext cache must be rejected", failure is IllegalStateException)
+            assertFalse(Files.list(physicalCache).use { paths -> paths.findAny().isPresent })
+        } finally {
+            runCatching { Files.deleteIfExists(cacheAlias) }
+            physicalCache.toFile().deleteRecursively()
+        }
+    }
+
     @Test fun verifiesStoredSizeAndDigestIndependentlyOfGcmAuthentication(): Unit = withTempDirectory { directory ->
         val store = EncryptedAttachmentStore(directory, AttachmentEncryptionKeyProvider { _ -> key })
         val plaintext = "verified metadata".toByteArray()

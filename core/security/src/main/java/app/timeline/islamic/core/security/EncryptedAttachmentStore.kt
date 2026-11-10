@@ -8,6 +8,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.nio.file.Files
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.util.UUID
@@ -88,7 +89,11 @@ class EncryptedAttachmentStore(
     private val rootDirectory: File,
     private val keyProvider: AttachmentEncryptionKeyProvider,
     private val maximumPlaintextBytes: Long = DEFAULT_MAXIMUM_PLAINTEXT_BYTES,
-    private val plaintextTemporaryDirectory: File = File(rootDirectory, ".decrypt-temp")
+    private val plaintextTemporaryDirectory: File = File(rootDirectory, ".decrypt-temp"),
+    /** Trusted app-private parent; its descendants are checked for symlink substitution. */
+    private val rootDirectoryBoundary: File? = null,
+    /** Trusted app-private parent for plaintext verification scratch files. */
+    private val plaintextTemporaryDirectoryBoundary: File? = null
 ) {
     constructor(
         context: Context,
@@ -98,7 +103,9 @@ class EncryptedAttachmentStore(
         File(File(context.applicationContext.noBackupFilesDir, ATTACHMENT_DIRECTORY), FORMAT_DIRECTORY),
         keyProvider,
         maximumPlaintextBytes,
-        plaintextTemporaryDirectory = File(context.applicationContext.cacheDir, DECRYPT_TEMP_DIRECTORY)
+        plaintextTemporaryDirectory = File(context.applicationContext.cacheDir, DECRYPT_TEMP_DIRECTORY),
+        rootDirectoryBoundary = context.applicationContext.noBackupFilesDir,
+        plaintextTemporaryDirectoryBoundary = context.applicationContext.cacheDir
     )
 
     init {
@@ -334,12 +341,24 @@ class EncryptedAttachmentStore(
     }
 
     private fun ensurePrivateDirectory(): File {
+        // Check before mkdirs as well as after it: otherwise a malicious symlink in a managed
+        // child component could redirect directory creation before the validation rejects it.
+        ensureNoSymbolicLinkSubstitution(
+            directory = rootDirectory,
+            trustedParent = rootDirectoryBoundary,
+            description = "Attachment storage directory"
+        )
         check(rootDirectory.exists() || rootDirectory.mkdirs()) { "Cannot create attachment directory" }
-        val absoluteRoot = rootDirectory.absoluteFile
+        ensureNoSymbolicLinkSubstitution(
+            directory = rootDirectory,
+            trustedParent = rootDirectoryBoundary,
+            description = "Attachment storage directory"
+        )
+        // Android may expose the same app-private directory through a path containing a platform
+        // symlink (for example /data/user/0 -> /data/data). Canonicalize that trusted parent alias;
+        // do not mistake it for a symlink at the app-managed directory itself.
         val canonicalRoot = rootDirectory.canonicalFile
-        check(canonicalRoot.isDirectory && canonicalRoot == absoluteRoot) {
-            "Attachment storage directory is not a canonical private directory"
-        }
+        check(canonicalRoot.isDirectory) { "Attachment storage path is not a directory" }
         return canonicalRoot
     }
 
@@ -357,15 +376,54 @@ class EncryptedAttachmentStore(
     }
 
     private fun ensureTemporaryDirectory(): File {
+        ensureNoSymbolicLinkSubstitution(
+            directory = plaintextTemporaryDirectory,
+            trustedParent = plaintextTemporaryDirectoryBoundary,
+            description = "Attachment decryption cache"
+        )
         check(plaintextTemporaryDirectory.exists() || plaintextTemporaryDirectory.mkdirs()) {
             "Cannot create private attachment decryption cache"
         }
-        val absoluteTemporaryDirectory = plaintextTemporaryDirectory.absoluteFile
+        ensureNoSymbolicLinkSubstitution(
+            directory = plaintextTemporaryDirectory,
+            trustedParent = plaintextTemporaryDirectoryBoundary,
+            description = "Attachment decryption cache"
+        )
         val canonicalTemporaryDirectory = plaintextTemporaryDirectory.canonicalFile
-        check(canonicalTemporaryDirectory.isDirectory && canonicalTemporaryDirectory == absoluteTemporaryDirectory) {
-            "Attachment decryption cache is not a canonical private directory"
+        check(canonicalTemporaryDirectory.isDirectory) {
+            "Attachment decryption cache path is not a directory"
         }
         return canonicalTemporaryDirectory
+    }
+
+    /**
+     * Reject a symlink at the managed directory or below a trusted Android-private parent, while
+     * permitting the OS to expose that trusted parent through a canonical path alias. Comparing
+     * absolute and canonical paths is incorrect on Android because the parent can legitimately
+     * contain platform symlinks.
+     */
+    private fun ensureNoSymbolicLinkSubstitution(
+        directory: File,
+        trustedParent: File?,
+        description: String
+    ) {
+        val directoryPath = directory.absoluteFile.toPath().normalize()
+        check(!Files.isSymbolicLink(directoryPath)) {
+            "$description must not be a symbolic link"
+        }
+        if (trustedParent == null) return
+
+        val trustedParentPath = trustedParent.absoluteFile.toPath().normalize()
+        check(directoryPath != trustedParentPath && directoryPath.startsWith(trustedParentPath)) {
+            "$description is outside its trusted private parent"
+        }
+        var current = trustedParent.absoluteFile
+        for (component in trustedParentPath.relativize(directoryPath)) {
+            current = File(current, component.toString())
+            check(!Files.isSymbolicLink(current.toPath())) {
+                "$description contains a symbolic-link path component"
+            }
+        }
     }
 
     private fun associatedData(id: String): ByteArray = "timeline-attachment:$FORMAT_VERSION:$id".toByteArray(Charsets.UTF_8)

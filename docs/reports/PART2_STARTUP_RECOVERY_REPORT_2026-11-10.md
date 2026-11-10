@@ -76,3 +76,45 @@ Run the exact patch on a network-enabled Android build host and verify:
 No attachment picker/import screen, viewer, share/export feature, retention-policy enforcement, backup migration, lifecycle service, model/agent feature, source corpus or domain logic was added. These require separate product/security contracts. No dependencies, database entities/indexes/migrations, permissions, backend, analytics or app version metadata changed.
 
 **Part 2 source status:** implemented; host Gradle and Android runtime acceptance remain outstanding. Part 3 has not started.
+
+## CI follow-up — Android canonical-path failure (2026-11-10)
+
+A subsequent API 36 hosted run compiled and packaged the application and Android test APKs, then exposed one common runtime failure in six tests:
+
+- `:core:security`: 2 failures in `EncryptedAttachmentKeystoreTest`.
+- `:core:persistence`: 4 failures in `RoomDocumentAttachmentRepositoryTest`.
+- All six failed in `EncryptedAttachmentStore.ensurePrivateDirectory()` with `Attachment storage directory is not a canonical private directory`.
+
+### Root cause
+
+The earlier guard required `directory.canonicalFile == directory.absoluteFile`. Android can legitimately expose an app-private path through a platform symlink alias (for example `/data/user/0` resolving to `/data/data`). The comparison rejected that valid alias even though the target directory remained inside the application's private data area. This was a path-validation defect, not an AES-GCM, Keystore, SQLCipher, Room, compilation or emulator-startup failure.
+
+### Correction applied
+
+- Canonicalize the resolved attachment/cache directory for file operations without requiring its absolute spelling to equal its canonical spelling.
+- Reject a symbolic link at the managed directory itself.
+- For the `Context` constructor, treat `noBackupFilesDir` and `cacheDir` as trusted Android-private boundaries and reject symbolic links in every app-managed child component below those boundaries.
+- Perform the symlink check both before and after `mkdirs()` so a redirected child cannot cause directory creation outside the expected app-managed path.
+- Keep the existing canonical-parent check for each attachment file, the opaque ID validation, AES-GCM authentication, size/hash validation and no-backup/cache placement.
+
+### Regression coverage added
+
+- A canonicalized parent alias is accepted while a symlinked managed storage directory is rejected.
+- A symlink below the trusted private parent is rejected before child-directory creation.
+- A symlinked plaintext verification cache is rejected.
+- An Android instrumentation test exercises the `Context` constructor against the real app `noBackupFilesDir` and cache path and confirms ciphertext remains under `noBackupFilesDir/attachments/v1`.
+- The Part 1 static CI guard now checks the canonical-alias and symlink-boundary contracts.
+
+### Verification after correction
+
+| Check | Result |
+|---|---|
+| Kotlin compile of store + JVM tests + Keystore instrumentation source against Android/AndroidX API-shaped stubs | PASS |
+| JVM attachment-store regression harness | **12/12 passed** (including the new path/symlink cases) |
+| Repository static Python checks | **28 passed, 0 unexpected failures** |
+| Android SDK preflight | BLOCKED in this local environment: no `ANDROID_HOME` / `ANDROID_SDK_ROOT` |
+| Room schema export verifier | BLOCKED in this local environment: KSP has not run here; no schema was fabricated |
+| Hosted API 36 Android instrumentation after this correction | **NOT YET RUN** |
+
+The correction is therefore source- and JVM-harness-verified, but Part 2 is not accepted until the same hosted `connectedAndroidTest` command is rerun on API 36. The rerun must show the Keystore and Room repository tests passing. No Room schema change or migration is part of this fix.
+

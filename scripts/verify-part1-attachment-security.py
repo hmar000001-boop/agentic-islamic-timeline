@@ -28,6 +28,11 @@ checks = {
     "application repository access": "RoomDocumentAttachmentRepository(database, EncryptedAttachmentStore(this))" in app,
     "provider-generated IV regression test": "samePlaintextUsesDistinctProviderGeneratedGcmIvs" in unit_test,
     "Android Keystore lifecycle test": "missingKeystoreKeyIsNotRecreatedWhileCiphertextExists" in keystore_test and "keystoreKeySurvivesStoreRecreationAndAuthenticatesContent" in keystore_test,
+    "Android app-private context-path instrumentation": "contextConstructorAcceptsPlatformCanonicalPrivatePathAndKeepsCiphertextInNoBackupFiles" in keystore_test,
+    "platform canonical parent aliases are accepted": "canonicalRoot == absoluteRoot" not in store and "rootDirectory.canonicalFile" in store,
+    "managed directory symlinks are rejected": "Files.isSymbolicLink(directoryPath)" in store and "ensureNoSymbolicLinkSubstitution" in store,
+    "managed path components are checked before directory creation": store.index("ensureNoSymbolicLinkSubstitution(") < store.index("rootDirectory.mkdirs()"),
+    "canonical alias and symlink regression tests": "acceptsCanonicalizedParentAliasButRejectsSymlinkedStorageDirectory" in unit_test and "rejectsSymlinkedChildBelowTrustedPrivateParentBeforeCreatingFiles" in unit_test and "rejectsSymlinkedPlaintextVerificationCache" in unit_test,
     "Android Keystore instrumentation is in CI": ":core:security:connectedDebugAndroidTest" in workflow,
 }
 failed = [name for name, ok in checks.items() if not ok]

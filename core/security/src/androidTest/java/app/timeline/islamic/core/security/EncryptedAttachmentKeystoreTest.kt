@@ -50,6 +50,26 @@ class EncryptedAttachmentKeystoreTest {
         assertTrue(keyStore.containsAlias(alias))
     }
 
+    @Test fun contextConstructorAcceptsPlatformCanonicalPrivatePathAndKeepsCiphertextInNoBackupFiles(): Unit {
+        val contextStore = EncryptedAttachmentStore(context, KeystoreAttachmentEncryptionKeyProvider(alias))
+        val attachmentId = "context-path-${UUID.randomUUID()}"
+        val content = "private context-backed attachment".toByteArray(Charsets.UTF_8)
+        try {
+            val metadata = contextStore.encrypt(attachmentId, ByteArrayInputStream(content))
+            val encryptedFile = File(
+                File(File(context.noBackupFilesDir, "attachments"), "v1"),
+                "$attachmentId.tla"
+            )
+            assertTrue(encryptedFile.isFile)
+            assertArrayEquals(
+                content,
+                contextStore.withDecryptedAttachment(attachmentId, metadata.sizeBytes, metadata.sha256) { it.readBytes() }
+            )
+        } finally {
+            contextStore.deleteEncrypted(attachmentId)
+        }
+    }
+
     @Test fun missingKeystoreKeyIsNotRecreatedWhileCiphertextExists(): Unit {
         val metadata = store.encrypt("keystore-key-loss", ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)))
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }

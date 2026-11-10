@@ -24,6 +24,12 @@
 - No attachment import UI, document previewer, sharing/export path, retention-policy enforcement or cloud backup was introduced.
 - No entity, index, database version, migration, dependency, manifest permission, server endpoint, analytics or background service was added.
 
+## CI follow-up — canonical Android path correction
+
+The first hosted API 36 run compiled and packaged the application/test APKs but failed 2 security Keystore tests and 4 Room attachment-repository tests at `EncryptedAttachmentStore.ensurePrivateDirectory()`. The guard compared absolute and canonical path strings and rejected a legitimate Android app-private parent alias. The store now canonicalizes that alias while rejecting symlinks at managed directories and below trusted `noBackupFilesDir` / `cacheDir` boundaries; preflight validation runs before `mkdirs()`. Regression tests cover canonical parent aliases, managed-directory symlinks, trusted-boundary child symlinks and plaintext-cache symlinks. A Context-constructor instrumentation test exercises the real app-private directories.
+
+The store plus test sources compile against API-shaped stubs, 12 JVM harness tests pass, and the repository static suite reports 28 passed / 0 unexpected failures. This does **not** replace the required hosted API 36 rerun. The original failing Keystore and repository instrumentation suites must be rerun before accepting Part 2.
+
 ## Verification required
 
 - Run the pinned Gradle/AGP/Kotlin build and `:core:persistence:testDebugUnitTest` on a network-enabled Android build host.

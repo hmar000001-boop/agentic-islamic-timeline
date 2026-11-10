@@ -15,7 +15,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -73,10 +75,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val timelineApplication = application as TimelineApplication
         val databaseResult = runCatching { timelineApplication.database }
-        lifecycleScope.launch(Dispatchers.IO) {
-            runCatching { timelineApplication.initializeAgentRuntime() }
-        }
         setContent {
+            val attachmentRecovery by timelineApplication.attachmentRecoveryState.collectAsState()
             MaterialTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     if (databaseResult.isSuccess) {
@@ -90,6 +90,34 @@ class MainActivity : ComponentActivity() {
                         var destination by androidx.compose.runtime.remember { mutableStateOf(AppDestination.TIMELINE) }
                         LaunchedEffect(Unit) { refreshCorpusScreen() }
                         Column(Modifier.fillMaxSize()) {
+                            when (val recovery = attachmentRecovery) {
+                                is app.timeline.islamic.core.persistence.AttachmentRecoveryState.Failed -> {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        Text(stringResource(R.string.app_attachment_recovery_failed))
+                                        TextButton(onClick = {
+                                            lifecycleScope.launch(Dispatchers.IO) {
+                                                timelineApplication.retryDocumentAttachmentRecovery()
+                                            }
+                                        }) {
+                                            Text(stringResource(R.string.app_attachment_recovery_retry))
+                                        }
+                                    }
+                                }
+                                is app.timeline.islamic.core.persistence.AttachmentRecoveryState.Ready -> {
+                                    val missingCount = recovery.report.missingDatabaseReferencedFiles.size
+                                    if (missingCount > 0) {
+                                        Text(
+                                            stringResource(
+                                                R.string.app_attachment_recovery_missing,
+                                                missingCount
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                                app.timeline.islamic.core.persistence.AttachmentRecoveryState.NotStarted,
+                                app.timeline.islamic.core.persistence.AttachmentRecoveryState.Running -> Unit
+                            }
                             Box(Modifier.weight(1f).fillMaxWidth()) {
                                 when (destination) {
                                     AppDestination.TIMELINE -> TimelineFeature(timelineRepository) { destination = AppDestination.CANVAS }

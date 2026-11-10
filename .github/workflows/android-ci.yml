@@ -62,6 +62,8 @@ jobs:
         run: python3 scripts/verify-part0-governance.py
       - name: Verify Part 1 attachment encryption and persistence contracts
         run: python3 scripts/verify-part1-attachment-security.py
+      - name: Verify Part 2 process startup and attachment recovery integration
+        run: python3 scripts/verify-part2-startup-recovery.py
       - name: Scan source for common secret patterns
         run: python3 scripts/secret-scan.py
       - name: Validate Room v7, encrypted dense-index and domain-workspace migrations

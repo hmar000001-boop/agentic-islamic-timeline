@@ -1,3 +1,13 @@
+## 0.7.0 Part 2 — process startup and attachment recovery (2026-11-10)
+
+- Added a serialized, observable attachment-recovery coordinator with explicit `NotStarted`, `Running`, `Ready` and `Failed` states. Successful startup recovery is cached for the process; failed recovery requires an explicit retry; coroutine cancellation resets to `NotStarted` and propagates.
+- Moved attachment reconciliation into `TimelineApplication.onCreate()` using a process-owned `SupervisorJob + Dispatchers.IO` scope. Activity recreation cannot cancel or duplicate the running attempt.
+- Moved agent audit/task recovery from `MainActivity.lifecycleScope` into the same application-owned scope. Existing agent readiness/failure fields and the fail-closed action gate are preserved.
+- Made the raw attachment repository private to the application and exposed import/list/read/delete APIs that all require successful recovery first.
+- Added an Arabic/English UI warning with an explicit retry action for recovery failure, and a count-only warning when SQLCipher metadata points to missing encrypted files. The UI never shows attachment IDs, paths, exception messages or content.
+- Added four coordinator unit tests and a Part 2 static CI guard. Room remains v7; no database migration, permission, external storage access, export/share path, backend, analytics or dependency was added.
+- Local source/static validation is recorded in `docs/reports/PART2_STARTUP_RECOVERY_REPORT_2026-11-10.md`. Gradle/JUnit, KSP and real API 36 SQLCipher/Keystore tests remain hosted CI/device acceptance gates.
+
 ## 0.7.0 CI hotfix — JUnit 4 signatures across unit and Android tests (2026-11-09)
 
 - The API 36 run exposed two more JUnit initialization errors in `BundledSqliteCorpusIndexTest` and `RoomDomainWorkspaceTest`: expression-bodied `runBlocking` tests returned the `Throwable` from a final `assertThrows` expression instead of JVM `void`.

@@ -2,6 +2,9 @@
     <string name="app_name">Timeline agentique</string>
     <string name="phase1_foundation_message">Local foundation is installed. Your timeline will remain available without an AI model.</string>
     <string name="app_storage_open_error">The encrypted local store could not be opened. No unencrypted fallback was used.</string>
+    <string name="app_attachment_recovery_failed">Encrypted attachment storage could not be verified. Attachments are temporarily unavailable; your other local data remains available.</string>
+    <string name="app_attachment_recovery_missing">%1$d attachment files are missing. Their metadata was preserved, but the affected files cannot be opened.</string>
+    <string name="app_attachment_recovery_retry">Retry recovery</string>
     <string name="app_nav_timeline">Timeline</string>
     <string name="app_nav_canvas">Canvas</string>
     <string name="app_nav_corpus">Knowledge</string>

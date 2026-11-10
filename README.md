@@ -4,6 +4,14 @@
 
 See [`docs/governance/`](docs/governance/README.md) for the source-rights register, scholarly review record, threat model, change-evidence policy and explicit release gates. A CI-generated offline sideload debug APK is a validation artifact, not a signed production release.
 
+### Part 2 — process startup and attachment recovery integration (2026-11-10)
+
+- The Application now starts encrypted attachment reconciliation in a process-owned I/O scope. Activity recreation no longer restarts or cancels the attachment recovery attempt.
+- Attachment operations are exposed through gated application APIs and remain unavailable until recovery reports `Ready`. A failed scan is visible and can be explicitly retried; missing referenced files are reported without deleting their Room metadata or exposing file paths/IDs in the UI.
+- Agent audit/task recovery is also launched from the Application scope rather than the Activity lifecycle, so it is not cancelled by Activity recreation. Its existing independent fail-closed readiness gate remains unchanged.
+- Arabic and English recovery status strings and a CI source guard were added. Room stays at v7; this part adds no database migration, network permission or background service.
+- Source tests cover one-time initialization, concurrent callers, explicit retry after failure and cancellation propagation/reset. Actual Gradle/JUnit and Android/Keystore/SQLCipher execution still require hosted CI/device validation.
+
 **Current source:** `0.7.0-phase6-domain-engines` (versionCode 25)
 **Current phase:** Phase 6 domain-engine foundation implemented in source; actual Gradle/KSP build, SQLCipher/API 36 instrumentation, user-device testing and scholarly rule-pack acceptance remain open. Phase 5C hosted/device acceptance is also pending from version 0.6.3.
 **Previous baseline:** Phase 0–4 implementation from 0.5.16; preserved incrementally.

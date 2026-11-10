@@ -2,6 +2,9 @@
     <string name="app_name">الخط الزمني الذكي</string>
     <string name="phase1_foundation_message">تم تثبيت البنية المحلية. سيبقى الخط الزمني متاحًا دون نموذج ذكاء اصطناعي.</string>
     <string name="app_storage_open_error">تعذر فتح التخزين المحلي المشفر. لم يتم استخدام تخزين غير مشفر كبديل.</string>
+    <string name="app_attachment_recovery_failed">تعذر التحقق من تخزين المرفقات المشفر. المرفقات غير متاحة مؤقتًا، بينما تظل بياناتك المحلية الأخرى متاحة.</string>
+    <string name="app_attachment_recovery_missing">هناك %1$d من ملفات المرفقات مفقودة. تم الحفاظ على بياناتها الوصفية، لكن لا يمكن فتح الملفات المتأثرة.</string>
+    <string name="app_attachment_recovery_retry">إعادة محاولة الاسترداد</string>
     <string name="app_nav_timeline">الخط الزمني</string>
     <string name="app_nav_canvas">مساحة العمل</string>
     <string name="app_nav_corpus">المعرفة</string>
